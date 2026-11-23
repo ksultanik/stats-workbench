@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statistics Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: tool index rail | inputs + results | sticky live distribution plot */
+  --bg:#F2F4F7; --surface:#FFFFFF; --ink:#132030; --muted:#5A6A7B; --line:#DAE0E8;
+  --accent:#1E5BFF; --accent-soft:rgba(30,91,255,.17);
+  --signal:#D9550A; --signal-soft:rgba(217,85,10,.22);
+  --muted-soft:rgba(90,106,123,.20);
+  --good:#1D7F46; --bad:#C0342A;
+  --font-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D131A; --surface:#141C26; --ink:#E4EBF3; --muted:#8E9DAE; --line:#243142;
+    --accent:#719CFF; --accent-soft:rgba(113,156,255,.24);
+    --signal:#FF8D4F; --signal-soft:rgba(255,141,79,.26);
+    --muted-soft:rgba(142,157,174,.22);
+    --good:#4CC27F; --bad:#FF6F62; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D131A; --surface:#141C26; --ink:#E4EBF3; --muted:#8E9DAE; --line:#243142;
+  --accent:#719CFF; --accent-soft:rgba(113,156,255,.24);
+  --signal:#FF8D4F; --signal-soft:rgba(255,141,79,.26);
+  --muted-soft:rgba(142,157,174,.22);
+  --good:#4CC27F; --bad:#FF6F62; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--font-body);-webkit-font-smoothing:antialiased}
+.app{display:grid;grid-template-columns:200px minmax(0,1fr) minmax(0,1.15fr);grid-template-areas:"head head head" "rail tool viz";gap:20px;max-width:1480px;margin:0 auto;padding:20px}
+.top{grid-area:head;display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand h1{font:600 26px/1.1 var(--font-display);margin:0;letter-spacing:.01em;text-wrap:balance}
+.brand span{color:var(--muted);font-size:14px}
+.formula{font:13px var(--font-mono);color:var(--muted)}
+.rail{grid-area:rail;align-self:start;position:sticky;top:20px;display:flex;flex-direction:column;gap:14px}
+.rail .grp{display:flex;flex-direction:column;gap:2px}
+.rail .grp-label{font:600 11px var(--font-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0 10px 4px}
+.rail button{all:unset;cursor:pointer;padding:7px 10px;border-radius:6px;font-size:14px;color:var(--ink);border-left:3px solid transparent}
+.rail button:hover{background:var(--surface)}
+.rail button[aria-current="true"]{background:var(--surface);border-left-color:var(--accent);font-weight:600}
+.rail button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.toolcol{grid-area:tool;min-width:0}
+.tool{padding:20px;display:flex;flex-direction:column;gap:18px}
+.tool[hidden]{display:none}
+.tool>header h2{font:600 22px/1.2 var(--font-display);margin:0 0 4px;text-wrap:balance}
+.tool>header p{margin:0;color:var(--muted);max-width:60ch}
+.form{display:flex;flex-direction:column;gap:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field[hidden]{display:none}
+.field label{font-size:12.5px;font-weight:500;color:var(--muted)}
+.field small{font-size:12px;color:var(--muted)}
+input[type=number],input[type=text],select,textarea{font:14px var(--font-mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+textarea{min-height:84px;resize:vertical;line-height:1.45}
+select{font-family:var(--font-body);cursor:pointer}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.check input{width:16px;height:16px;accent-color:var(--accent)}
+.results{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:14px}
+.headline .hl-label{font-size:12.5px;color:var(--muted);font-weight:500}
+.headline .hl-value{font:500 32px/1.15 var(--font-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em;overflow-wrap:anywhere}
+.headline .hl-sub{font:14px var(--font-mono);color:var(--accent)}
+.say{margin:0;max-width:62ch}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:0 24px;margin:0}
+.kv div{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.kv dt{color:var(--muted);font-size:13.5px}
+.kv dd{margin:0;font:13.5px var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;overflow-wrap:anywhere}
+.verdict{align-self:flex-start;font-weight:600;font-size:13.5px;padding:5px 10px;border-radius:999px;border:1px solid}
+.verdict.reject{color:var(--signal);background:var(--signal-soft);border-color:var(--signal)}
+.verdict.keep{color:var(--muted);background:var(--muted-soft);border-color:var(--line)}
+.verdict.warn{color:var(--bad);border-color:var(--bad)}
+.hyp{font:13.5px var(--font-mono);color:var(--muted);margin:0}
+.note{margin:0;font-size:13px;color:var(--muted);max-width:66ch}
+.error{color:var(--bad);font-weight:500;margin:0}
+.tblwrap{overflow-x:auto}
+table.tbl{border-collapse:collapse;font:13px var(--font-mono);font-variant-numeric:tabular-nums;min-width:100%}
+.tbl th,.tbl td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.tbl th{font:600 12px var(--font-body);color:var(--muted)}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:500 13px var(--font-body);padding:7px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn:hover{filter:brightness(1.08)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.viz{grid-area:viz;align-self:start;position:sticky;top:20px;padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px}
+.viz-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.eyebrow{font:600 11px var(--font-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.viz h2{font:500 17px/1.3 var(--font-mono);margin:2px 0 0}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:10px;border-radius:2px;display:inline-block}
+.plot-wrap{position:relative;height:380px}
+canvas{display:block;touch-action:pan-y;cursor:crosshair}
+.readout{font:12.5px var(--font-mono);color:var(--ink);background:var(--bg);border-radius:6px;padding:6px 10px;min-height:30px;font-variant-numeric:tabular-nums}
+.caption{margin:0;font-size:13px;color:var(--muted)}
+@media (max-width:1100px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "rail" "viz" "tool";gap:14px;padding:16px}
+  .rail{position:static;flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:4px;scrollbar-width:thin}
+  .rail .grp{flex-direction:row;gap:6px}
+  .rail .grp-label{display:none}
+  .rail button{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--surface);font-size:13.5px}
+  .rail button[aria-current="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .viz{position:static}
+  .plot-wrap{height:250px}
+  .formula{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><h1>Statistics Workbench</h1><span>Calculators with a live distribution plot</span></div>
+    <div class="formula">f(x) = (1/σ√2π) · e<sup>−(x−μ)²/2σ²</sup></div>
+  </header>
+  <nav class="rail" id="rail" aria-label="Tools"></nav>
+  <main class="toolcol card" id="tools"></main>
+  <section class="viz card" aria-label="Distribution plot">
+    <div class="viz-head">
+      <div><div class="eyebrow" id="vizKind">Normal distribution</div><h2 id="vizTitle"></h2></div>
+      <div class="legend" id="vizLegend"></div>
+    </div>
+    <div class="plot-wrap"><canvas id="plot" role="img" aria-label="Distribution plot that updates with the calculator inputs"></canvas></div>
+    <div class="readout" id="vizReadout">Move across the chart to read values.</div>
+    <p class="caption" id="vizCaption"></p>
+  </section>
+</div>
+
+<script>
+// MATH-START
+const M = {};
+M.lnGamma = function(z){
+  const g=7, c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if(z<0.5) return Math.log(Math.PI/Math.abs(Math.sin(Math.PI*z))) - M.lnGamma(1-z);
+  z-=1; let x=c[0]; for(let i=1;i<g+2;i++) x+=c[i]/(z+i);
+  const t=z+g+0.5; return 0.5*Math.log(2*Math.PI)+(z+0.5)*Math.log(t)-t+Math.log(x);
+};
+M._gser = function(a,x){ let ap=a, sum=1/a, del=sum; for(let n=0;n<1000;n++){ ap++; del*=x/ap; sum+=del; if(Math.abs(del)<Math.abs(sum)*1e-16) break; } return sum*Math.exp(-x+a*Math.log(x)-M.lnGamma(a)); };
+M._gcf = function(a,x){ const FP=1e-300; let b=x+1-a, c=1/FP, d=1/b, h=d;
+  for(let i=1;i<1000;i++){ const an=-i*(i-a); b+=2; d=an*d+b; if(Math.abs(d)<FP) d=FP; c=b+an/c; if(Math.abs(c)<FP) c=FP; d=1/d; const del=d*c; h*=del; if(Math.abs(del-1)<1e-16) break; }
+  return Math.exp(-x+a*Math.log(x)-M.lnGamma(a))*h; };
+M.gammaP = (a,x)=> x<=0 ? 0 : (x<a+1 ? M._gser(a,x) : 1-M._gcf(a,x));
+M.gammaQ = (a,x)=> x<=0 ? 1 : (x<a+1 ? 1-M._gser(a,x) : M._gcf(a,x));
+M._betacf = function(a,b,x){ const FP=1e-300; const qab=a+b, qap=a+1, qam=a-1; let c=1, d=1-qab*x/qap; if(Math.abs(d)<FP) d=FP; d=1/d; let h=d;
+  for(let m=1;m<=1000;m++){ const m2=2*m; let aa=m*(b-m)*x/((qam+m2)*(a+m2)); d=1+aa*d; if(Math.abs(d)<FP) d=FP; c=1+aa/c; if(Math.abs(c)<FP) c=FP; d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2)); d=1+aa*d; if(Math.abs(d)<FP) d=FP; c=1+aa/c; if(Math.abs(c)<FP) c=FP; d=1/d; const del=d*c; h*=del; if(Math.abs(del-1)<1e-16) break; }
+  return h; };
+M.betaI = function(x,a,b){ if(x<=0) return 0; if(x>=1) return 1;
+  const bt=Math.exp(M.lnGamma(a+b)-M.lnGamma(a)-M.lnGamma(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x<(a+1)/(a+b+2) ? bt*M._betacf(a,b,x)/a : 1-bt*M._betacf(b,a,1-x)/b; };
+M.normPdf = z => Math.exp(-z*z/2)/Math.sqrt(2*Math.PI);
+M.normCdf = z => { if(!isFinite(z)) return z>0?1:0; const q=0.5*M.gammaQ(0.5,z*z/2); return z<0 ? q : 1-q; };
+M.normSf = z => M.normCdf(-z);
+M.normInv = function(p){
+  if(p<=0) return -Infinity; if(p>=1) return Infinity;
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  const pl=0.02425; let q,r,x;
+  if(p<pl){ q=Math.sqrt(-2*Math.log(p)); x=(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+  else if(p<=1-pl){ q=p-0.5; r=q*q; x=(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1); }
+  else { q=Math.sqrt(-2*Math.log(1-p)); x=-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+  const e=M.normCdf(x)-p, u=e*Math.sqrt(2*Math.PI)*Math.exp(x*x/2); return x-u/(1+x*u/2);
+};
+M.tPdf = (t,v) => Math.exp(M.lnGamma((v+1)/2)-M.lnGamma(v/2)-0.5*Math.log(v*Math.PI)-(v+1)/2*Math.log(1+t*t/v));
+M.tCdf = (t,v) => { if(!isFinite(t)) return t>0?1:0; const tail=0.5*M.betaI(v/(v+t*t),v/2,0.5); return t>0?1-tail:tail; };
+M.tSf = (t,v) => M.tCdf(-t,v);
+M.chiPdf = (x,k) => x<=0 ? 0 : Math.exp((k/2-1)*Math.log(x)-x/2-(k/2)*Math.LN2-M.lnGamma(k/2));
+M.chiCdf = (x,k) => M.gammaP(k/2,x/2);
+M.chiSf = (x,k) => M.gammaQ(k/2,x/2);
+M.fPdf = (x,a,b) => x<=0 ? 0 : Math.exp(0.5*a*Math.log(a)+0.5*b*Math.log(b)+(a/2-1)*Math.log(x)-(a+b)/2*Math.log(b+a*x)-(M.lnGamma(a/2)+M.lnGamma(b/2)-M.lnGamma((a+b)/2)));
+M.fCdf = (x,a,b) => x<=0 ? 0 : M.betaI(a*x/(a*x+b),a/2,b/2);
+M.fSf = (x,a,b) => x<=0 ? 1 : M.betaI(b/(b+a*x),b/2,a/2);
+M.invert = function(cdf,p,lo,hi,positive){
+  if(positive){ lo=0; hi=Math.max(hi,1); while(cdf(hi)<p && hi<1e8) hi*=2; }
+  else { while(cdf(lo)>p && lo>-1e8) lo*=2; while(cdf(hi)<p && hi<1e8) hi*=2; }
+  for(let i=0;i<200;i++){ const m=(lo+hi)/2; if(cdf(m)<p) lo=m; else hi=m; if(hi-lo<1e-12*Math.max(1,Math.abs(m))) break; }
+  return (lo+hi)/2; };
+M.tInv = (p,v) => M.invert(t=>M.tCdf(t,v),p,-1,1,false);
+M.chiInv = (p,k) => M.invert(x=>M.chiCdf(x,k),p,0,k,true);
+M.fInv = (p,a,b) => M.invert(x=>M.fCdf(x,a,b),p,0,1,true);
+M.binomPmf = (k,n,p) => { if(k<0||k>n) return 0; if(p===0) return k===0?1:0; if(p===1) return k===n?1:0;
+  return Math.exp(M.lnGamma(n+1)-M.lnGamma(k+1)-M.lnGamma(n-k+1)+k*Math.log(p)+(n-k)*Math.log(1-p)); };
+M.poisPmf = (k,l) => k<0 ? 0 : Math.exp(k*Math.log(l)-l-M.lnGamma(k+1));
+M.mean = a => a.reduce((s,x)=>s+x,0)/a.length;
+M.quantile = (sorted,q) => { const h=(sorted.length-1)*q, lo=Math.floor(h), hi=Math.ceil(h); return sorted[lo]+(h-lo)*(sorted[hi]-sorted[lo]); };
+// MATH-END
+
+/* ---------- formatting & form helpers ---------- */
+const $ = id => document.getElementById(id);
+const val = id => $(id).value;
+const num = id => { const v=$(id).value.trim(); return v==='' ? NaN : Number(v); };
+const chk = id => $(id).checked;
+class UserError extends Error{}
+const need = (c,msg) => { if(!c) throw new UserError(msg); };
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const show = (id,on) => { const w=$('w-'+id); if(w) w.hidden=!on; };
+const setLabel = (id,txt) => { const l=document.querySelector(`label[for="${id}"]`); if(l) l.textContent=txt; };
+function fmt(x,d=4){
+  if(x===Infinity) return '∞'; if(x===-Infinity) return '−∞'; if(!Number.isFinite(x)) return '—';
+  const ax=Math.abs(x);
+  if(ax!==0 && (ax>=1e7 || ax<1e-4)) return x.toExponential(3).replace(/-/g,'−');
+  return (+x.toFixed(d)).toString().replace(/-/g,'−');
+}
+const fmtP = p => !Number.isFinite(p) ? '—' : p<1e-300 ? '< 1e−300' : p<1e-4 ? p.toExponential(2).replace(/-/g,'−') : p.toFixed(4);
+const pct = p => { const v=p*100; if(v>0 && v<0.01) return '< 0.01%'; if(v<100 && v>99.99) return '> 99.99%'; return v.toFixed(2)+'%'; };
+const parseList = s => s.split(/[\s,;]+/).filter(t=>t!=='').map(Number);
+function parseNums(s,what){ const a=parseList(s); const bad=a.findIndex(x=>!Number.isFinite(x)); need(bad<0,`${what} contains something that isn't a number. Separate values with spaces, commas or new lines.`); return a; }
+const F = (id,label,value,o={}) => `<div class="field" id="w-${id}"><label for="${id}">${label}</label><input id="${id}" type="${o.type||'number'}" step="any" value="${value}"${o.ph?` placeholder="${o.ph}"`:''}>${o.hint?`<small>${o.hint}</small>`:''}</div>`;
+const S = (id,label,opts,value) => `<div class="field" id="w-${id}"><label for="${id}">${label}</label><select id="${id}">${opts.map(([v,t])=>`<option value="${v}"${String(v)===String(value)?' selected':''}>${t}</option>`).join('')}</select></div>`;
+const T = (id,label,value,hint) => `<div class="field" id="w-${id}"><label for="${id}">${label}</label><textarea id="${id}" spellcheck="false">${value}</textarea>${hint?`<small>${hint}</small>`:''}</div>`;
+const CB = (id,label,on) => `<div class="field" id="w-${id}"><label class="check" for="${id}"><input type="checkbox" id="${id}"${on?' checked':''}> ${label}</label></div>`;
+const CONF = [['0.8','80%'],['0.9','90%'],['0.95','95%'],['0.98','98%'],['0.99','99%'],['0.999','99.9%']];
+const strip = s => String(s).replace(/<[^>]+>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+function render(rid,o){
+  let h='';
+  if(o.hyp) h+=`<p class="hyp">${o.hyp}</p>`;
+  if(o.headline) h+=`<div class="headline"><div class="hl-label">${o.headline.label}</div><div class="hl-value">${o.headline.value}</div>${o.headline.sub?`<div class="hl-sub">${o.headline.sub}</div>`:''}</div>`;
+  if(o.verdict) h+=`<div class="verdict ${o.verdict.tone}">${o.verdict.text}</div>`;
+  if(o.say) h+=`<p class="say">${o.say}</p>`;
+  if(o.rows) h+=`<dl class="kv">${o.rows.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+  if(o.html) h+=o.html;
+  if(o.note) h+=`<p class="note">${o.note}</p>`;
+  h+=`<div class="actions">${o.actions||''}<button type="button" class="btn ghost" data-copy="${rid}">Copy results</button></div>`;
+  const el=$(rid); el.innerHTML=h;
+  el._text=[o.hyp?strip(o.hyp):'', o.headline?`${strip(o.headline.label)}: ${strip(o.headline.value)}${o.headline.sub?' ('+strip(o.headline.sub)+')':''}`:'', o.verdict?strip(o.verdict.text):'', ...(o.rows||[]).map(([k,v])=>`${strip(k)}: ${strip(v)}`), o.say?strip(o.say):''].filter(Boolean).join('\n');
+}
+const table = (head,rows) => `<div class="tblwrap"><table class="tbl"><thead><tr>${head.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(x=>`<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+
+/* ---------- plot engine ---------- */
+const Plot = (()=>{
+  const cv=$('plot'), ctx=cv.getContext('2d'); let spec=null, W=0, H=0, hoverX=null, lay=null;
+  const readout=$('vizReadout'), DEF='Move across the chart to read values.';
+  function C(){ const s=getComputedStyle(document.documentElement), g=n=>s.getPropertyValue(n).trim();
+    return {ink:g('--ink'),muted:g('--muted'),line:g('--line'),surface:g('--surface'),bg:g('--bg'),
+      accent:g('--accent'),accentSoft:g('--accent-soft'),signal:g('--signal'),signalSoft:g('--signal-soft'),mutedSoft:g('--muted-soft'),mono:g('--font-mono')}; }
+  const solid=(c,k)=>({accent:c.accent,signal:c.signal,muted:c.muted,ink:c.ink}[k]||c.accent);
+  const soft=(c,k)=>({accent:c.accentSoft,signal:c.signalSoft,muted:c.mutedSoft}[k]||c.accentSoft);
+  function nice(min,max,count,integer){ const span=max-min||1; let step=Math.pow(10,Math.floor(Math.log10(span/count))); const e=span/count/step;
+    if(e>=7.5) step*=10; else if(e>=3.5) step*=5; else if(e>=1.5) step*=2; if(integer&&step<1) step=1;
+    const out=[]; for(let v=Math.ceil(min/step)*step; v<=max+step*1e-9; v+=step) out.push(+v.toFixed(10)); return out; }
+  function resize(){ const r=cv.parentElement.getBoundingClientRect(), dpr=window.devicePixelRatio||1; W=r.width; H=r.height;
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); cv.style.width=W+'px'; cv.style.height=H+'px'; ctx.setTransform(dpr,0,0,dpr,0,0); draw(); }
+  function pill(text,x,y,color,c,align){ ctx.font=`500 11px ${c.mono}`; const w=ctx.measureText(text).width+10;
+    let left = align==='left'? x : align==='right'? x-w : x-w/2; left=Math.max(2,Math.min(W-w-2,left));
+    ctx.fillStyle=c.surface; ctx.strokeStyle=color; ctx.lineWidth=1; ctx.beginPath(); ctx.roundRect(left,y-9,w,18,4); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=color; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(text,left+5,y+0.5); }
+  function draw(){
+    if(!spec||!W) return; const c=C(); ctx.clearRect(0,0,W,H);
+    const narrow=W<480;
+    const nBr=(spec.brackets||[]).length;
+    const L=spec.scatter?50:16, R=W-16, T=18+(spec.box?30:0)+nBr*18+((spec.markers||[]).length?16:0), B=H-(spec.ticks&&spec.ticks.some(t=>t.sub)?42:28);
+    const {xmin,xmax}=spec; const X=x=>L+(x-xmin)/(xmax-xmin)*(R-L);
+    let ymin=0,ymax;
+    if(spec.scatter){ ymin=spec.ymin; ymax=spec.ymax; }
+    else { const v=[]; (spec.curves||[]).forEach(cu=>{ for(let i=0;i<=240;i++){ const y=cu.f(xmin+(xmax-xmin)*(i+0.5)/241); if(isFinite(y)) v.push(y);} }); (spec.bars||[]).forEach(b=>v.push(b.y));
+      v.sort((a,b)=>a-b); let mx=v[v.length-1]||1; const q=v[Math.floor(v.length*0.95)]||mx; if(mx>q*2.5) mx=q*2.5; ymax=(mx||1)*1.08; }
+    const Y=y=>B-(y-ymin)/(ymax-ymin)*(B-T); const cy=y=>Y(Math.min(isFinite(y)?y:ymax,ymax));
+    lay={L,R,X,Y};
+    // grid + ticks
+    const ticks = spec.ticks || nice(xmin,xmax,narrow?5:8,spec.integer).map(x=>({x,label:fmt(x,3)}));
+    ctx.font=`11px ${c.mono}`; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ticks.forEach(t=>{ if(t.x<xmin-1e-9||t.x>xmax+1e-9) return; const px=X(t.x); ctx.strokeStyle=c.line; ctx.globalAlpha=.6; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(px+.5,T); ctx.lineTo(px+.5,B); ctx.stroke(); ctx.globalAlpha=1;
+      ctx.fillStyle=c.muted; ctx.fillText(t.label,px,B+15); if(t.sub){ ctx.fillStyle=c.accent; ctx.fillText(t.sub,px,B+30);} });
+    if(spec.scatter){ nice(ymin,ymax,5).forEach(y=>{ const py=Y(y); ctx.strokeStyle=c.line; ctx.globalAlpha=.6; ctx.beginPath(); ctx.moveTo(L,py+.5); ctx.lineTo(R,py+.5); ctx.stroke(); ctx.globalAlpha=1; ctx.fillStyle=c.muted; ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.fillText(fmt(y,3),L-6,py); }); }
+    ctx.strokeStyle=c.muted; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(L,B+.5); ctx.lineTo(R,B+.5); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.rect(L,T-4,R-L,B-T+4); ctx.clip();
+    // bars
+    (spec.bars||[]).forEach(b=>{ const w=spec.barWidth||1, x0=X(b.x-w/2), x1=X(b.x+w/2), gap=Math.min(1.5,(x1-x0)*0.12);
+      ctx.fillStyle = b.c==='hist' ? c.accentSoft : b.c ? solid(c,b.c) : c.mutedSoft; ctx.fillRect(x0+gap,Y(b.y),Math.max(1,x1-x0-2*gap),B-Y(b.y));
+      if(b.c==='hist'){ ctx.strokeStyle=c.accent; ctx.lineWidth=1; ctx.strokeRect(x0+gap+.5,Y(b.y)+.5,Math.max(1,x1-x0-2*gap)-1,B-Y(b.y)-1); } });
+    // curve regions then strokes
+    (spec.curves||[]).forEach(cu=>{ (cu.regions||[]).forEach(([a,b,k])=>{ a=Math.max(a,xmin); b=Math.min(b,xmax); if(!(b>a)) return;
+      const n=Math.max(2,Math.ceil(X(b)-X(a))); ctx.beginPath(); ctx.moveTo(X(a),B);
+      for(let i=0;i<=n;i++){ const x=a+(b-a)*i/n; ctx.lineTo(X(x),cy(cu.f(x))); }
+      ctx.lineTo(X(b),B); ctx.closePath(); ctx.fillStyle=soft(c,k||'accent'); ctx.fill();
+      ctx.strokeStyle=solid(c,k||'accent'); ctx.lineWidth=1; [a,b].forEach(e=>{ if(e>xmin&&e<xmax){ ctx.beginPath(); ctx.moveTo(X(e)+.5,B); ctx.lineTo(X(e)+.5,cy(cu.f(e))); ctx.stroke(); } }); }); });
+    (spec.curves||[]).forEach(cu=>{ ctx.beginPath(); let started=false; for(let px=L;px<=R;px+=1){ const x=xmin+(px-L)/(R-L)*(xmax-xmin), y=cu.f(x); if(!isFinite(y)&&y!==Infinity) continue; const py=cy(y); if(!started){ctx.moveTo(px,py);started=true;} else ctx.lineTo(px,py); }
+      ctx.strokeStyle=solid(c,cu.color||'ink'); ctx.lineWidth=cu.width||2; ctx.setLineDash(cu.dash?[5,4]:[]); ctx.stroke(); ctx.setLineDash([]); });
+    // scatter
+    if(spec.scatter){ if(spec.line){ const {m,b}=spec.line; ctx.strokeStyle=c.signal; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(X(xmin),Y(m*xmin+b)); ctx.lineTo(X(xmax),Y(m*xmax+b)); ctx.stroke(); }
+      spec.points.forEach(([x,y])=>{ ctx.beginPath(); ctx.arc(X(x),Y(y),4,0,7); ctx.fillStyle=c.accentSoft; ctx.fill(); ctx.strokeStyle=c.accent; ctx.lineWidth=1.5; ctx.stroke(); });
+      if(spec.pred){ const [x,y]=spec.pred; ctx.beginPath(); ctx.arc(X(x),Y(y),6,0,7); ctx.fillStyle=c.signal; ctx.fill(); } }
+    // hover
+    if(hoverX!=null){ ctx.strokeStyle=c.ink; ctx.globalAlpha=.45; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(X(hoverX)+.5,T); ctx.lineTo(X(hoverX)+.5,B); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1; }
+    ctx.restore();
+    // markers
+    const ms=(spec.markers||[]).filter(m=>isFinite(m.x)&&m.x>=xmin&&m.x<=xmax).sort((a,b)=>a.x-b.x); let lastR=-1e9, lvl=0;
+    ms.forEach(m=>{ const px=X(m.x), col=solid(c,m.color||'ink'); ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.setLineDash(m.dash?[4,3]:[]); ctx.beginPath(); ctx.moveTo(px+.5,B); ctx.lineTo(px+.5,T-2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font=`500 11px ${c.mono}`; const w=ctx.measureText(m.label).width+10; lvl = (px-w/2 < lastR+4) ? lvl+1 : 0; if(lvl>2) lvl=0; lastR=px+w/2;
+      pill(m.label,px,T-8+lvl*20,col,c); });
+    // brackets (68-95-99.7)
+    (spec.brackets||[]).forEach((br,i)=>{ const y=14+(spec.box?30:0)+i*18, x0=X(Math.max(br.a,xmin)), x1=X(Math.min(br.b,xmax)); ctx.strokeStyle=c.muted; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x0,y+5); ctx.lineTo(x0,y); ctx.lineTo(x1,y); ctx.lineTo(x1,y+5); ctx.stroke();
+      ctx.font=`11px ${c.mono}`; const w=ctx.measureText(br.label).width+8; ctx.fillStyle=c.surface; ctx.fillRect((x0+x1)/2-w/2,y-7,w,14); ctx.fillStyle=c.ink; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(br.label,(x0+x1)/2,y); });
+    // box plot strip
+    if(spec.box){ const b=spec.box, y=20; ctx.strokeStyle=c.ink; ctx.lineWidth=1.25; ctx.beginPath(); ctx.moveTo(X(b.lo),y); ctx.lineTo(X(b.q1),y); ctx.moveTo(X(b.q3),y); ctx.lineTo(X(b.hi),y);
+      ctx.moveTo(X(b.lo),y-5); ctx.lineTo(X(b.lo),y+5); ctx.moveTo(X(b.hi),y-5); ctx.lineTo(X(b.hi),y+5); ctx.stroke();
+      ctx.fillStyle=c.accentSoft; ctx.fillRect(X(b.q1),y-8,X(b.q3)-X(b.q1),16); ctx.strokeRect(X(b.q1)+.5,y-8+.5,X(b.q3)-X(b.q1),16);
+      ctx.strokeStyle=c.signal; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(X(b.med),y-8); ctx.lineTo(X(b.med),y+8); ctx.stroke();
+      (b.out||[]).forEach(o=>{ ctx.beginPath(); ctx.arc(X(o),y,3,0,7); ctx.strokeStyle=c.bad||c.signal; ctx.lineWidth=1.25; ctx.stroke(); }); }
+  }
+  function set(s){ spec=s; $('vizKind').textContent=s.kind||''; $('vizTitle').textContent=s.title||''; $('vizCaption').textContent=s.caption||'';
+    const lg=$('vizLegend'); lg.innerHTML=(s.legend||[]).map(l=>`<span><i style="background:var(--${l.c}${l.soft?'-soft':''});${l.line?'height:3px;':''}"></i>${esc(l.t)}</span>`).join('');
+    cv.setAttribute('aria-label',(s.kind||'Chart')+': '+(s.title||'')+'. '+(s.caption||''));
+    if(hoverX!=null && (hoverX<s.xmin||hoverX>s.xmax)) hoverX=null;
+    readout.textContent = hoverX!=null && s.hover ? s.hover(hoverX) : DEF; draw(); }
+  cv.addEventListener('pointermove',e=>{ if(!spec||!lay) return; const r=cv.getBoundingClientRect(), px=e.clientX-r.left; const x=spec.xmin+(Math.max(lay.L,Math.min(lay.R,px))-lay.L)/(lay.R-lay.L)*(spec.xmax-spec.xmin);
+    hoverX=x; readout.textContent = spec.hover ? spec.hover(x) : DEF; draw(); });
+  cv.addEventListener('pointerleave',()=>{ hoverX=null; readout.textContent=DEF; draw(); });
+  new ResizeObserver(resize).observe(cv.parentElement);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+  new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  return {set,draw,nice};
+})();
+
+/* shared plot helpers */
+function zTicks(mu,sd,xmin,xmax){ const out=[]; for(let k=Math.ceil((xmin-mu)/sd);k<=Math.floor((xmax-mu)/sd);k++) out.push({x:mu+k*sd,label:fmt(mu+k*sd,2),sub:k===0?'μ':(k>0?'+':'−')+Math.abs(k)+'σ'}); return out; }
+function nullDist(df){ return df==null ? {f:M.normPdf,cdf:M.normCdf,sf:M.normSf,q:M.normInv,name:'Standard normal',title:'Z ~ N(0, 1)'}
+  : {f:x=>M.tPdf(x,df),cdf:x=>M.tCdf(x,df),sf:x=>M.tSf(x,df),q:p=>M.tInv(p,df),name:"Student's t distribution",title:`t, df = ${fmt(df,2)}`}; }
+
+/* ---------- tools ---------- */
+const tools = {};
+let lastDesc=null;
+
+tools.normal = { name:'Normal curve', group:'Distributions',
+  lede:'Find the area under any normal curve, or work backward from an area to the cutoff value.',
+  form:()=>`<div class="grid">${F('n-mu','Mean (μ)',100)}${F('n-sd','Standard deviation (σ)',15)}</div>
+    ${S('n-mode','Find',[['lt','P(X < a)'],['gt','P(X > a)'],['between','P(a < X < b)'],['outside','P(X < a or X > b)'],['inv','The value x for a given area']],'between')}
+    <div class="grid">${F('n-a','a',85)}${F('n-b','b',115)}${F('n-p','Area (between 0 and 1)',0.9)}${S('n-tail','Where the area sits',[['left','Left of x'],['right','Right of x'],['central','Centered on μ']],'left')}</div>
+    ${CB('n-rule','Show the 68–95–99.7 rule',false)}`,
+  run(){
+    const mu=num('n-mu'), sd=num('n-sd'), mode=val('n-mode'), inv=mode==='inv';
+    show('n-a',!inv); show('n-b',mode==='between'||mode==='outside'); show('n-p',inv); show('n-tail',inv);
+    need(Number.isFinite(mu),'Enter a mean.'); need(sd>0,'Enter a standard deviation greater than 0.');
+    const Z=x=>(x-mu)/sd, cdf=x=>M.normCdf(Z(x));
+    let regions=[], markers=[], head, say, rows=[];
+    if(!inv){
+      let a=num('n-a'), b=num('n-b'); need(Number.isFinite(a),'Enter a value for a.');
+      const two=mode==='between'||mode==='outside'; if(two){ need(Number.isFinite(b),'Enter a value for b.'); if(b<a) [a,b]=[b,a]; }
+      let p, lbl;
+      if(mode==='lt'){ p=cdf(a); regions=[[-Infinity,a]]; lbl=`P(X < ${fmt(a)})`; say=`${pct(p)} of values fall below ${fmt(a)}.`; }
+      if(mode==='gt'){ p=M.normSf(Z(a)); regions=[[a,Infinity]]; lbl=`P(X > ${fmt(a)})`; say=`${pct(p)} of values fall above ${fmt(a)}.`; }
+      if(mode==='between'){ p=cdf(b)-cdf(a); regions=[[a,b]]; lbl=`P(${fmt(a)} < X < ${fmt(b)})`; say=`${pct(p)} of values fall between ${fmt(a)} and ${fmt(b)}.`; }
+      if(mode==='outside'){ p=cdf(a)+M.normSf(Z(b)); regions=[[-Infinity,a],[b,Infinity]]; lbl=`P(X < ${fmt(a)} or X > ${fmt(b)})`; say=`${pct(p)} of values fall outside ${fmt(a)} to ${fmt(b)}.`; }
+      head={label:lbl,value:fmtP(p),sub:pct(p)};
+      rows.push([two?'z for a':'z-score',fmt(Z(a),4)]); if(two) rows.push(['z for b',fmt(Z(b),4)]);
+      rows.push(['Complement (1 − P)',fmtP(1-p)],['Percentile of a',pct(cdf(a))]); if(two) rows.push(['Percentile of b',pct(cdf(b))]);
+      markers.push({x:a,label:'a = '+fmt(a,2),color:'accent'}); if(two) markers.push({x:b,label:'b = '+fmt(b,2),color:'accent'});
+    } else {
+      const p=num('n-p'), tail=val('n-tail'); need(p>0&&p<1,'Enter an area between 0 and 1, such as 0.9.');
+      if(tail==='left'){ const z=M.normInv(p), x=mu+z*sd; regions=[[-Infinity,x]]; head={label:`x with ${pct(p)} of the area to its left`,value:fmt(x,4),sub:`z = ${fmt(z,4)}`}; markers.push({x,label:'x = '+fmt(x,2),color:'accent'}); say=`${pct(p)} of values fall below ${fmt(x,4)}. That is the ${fmt(p*100,2)}th percentile.`; }
+      if(tail==='right'){ const z=M.normInv(1-p), x=mu+z*sd; regions=[[x,Infinity]]; head={label:`x with ${pct(p)} of the area to its right`,value:fmt(x,4),sub:`z = ${fmt(z,4)}`}; markers.push({x,label:'x = '+fmt(x,2),color:'accent'}); say=`${pct(p)} of values fall above ${fmt(x,4)}.`; }
+      if(tail==='central'){ const z=M.normInv((1+p)/2), lo=mu-z*sd, hi=mu+z*sd; regions=[[lo,hi]]; head={label:`Middle ${pct(p)} of the distribution`,value:`${fmt(lo,4)} to ${fmt(hi,4)}`,sub:`z = ±${fmt(z,4)}`}; markers.push({x:lo,label:fmt(lo,2),color:'accent'},{x:hi,label:fmt(hi,2),color:'accent'}); say=`The middle ${pct(p)} of values fall between ${fmt(lo,4)} and ${fmt(hi,4)}.`; }
+    }
+    let xmin=mu-4*sd, xmax=mu+4*sd; markers.forEach(m=>{ xmin=Math.max(mu-10*sd,Math.min(xmin,m.x-0.5*sd)); xmax=Math.min(mu+10*sd,Math.max(xmax,m.x+0.5*sd)); });
+    render('r-normal',{headline:head,say,rows});
+    Plot.set({kind:'Normal distribution',title:`X ~ N(μ = ${fmt(mu)}, σ = ${fmt(sd)})`,xmin,xmax,ticks:zTicks(mu,sd,xmin,xmax),
+      curves:[{f:x=>M.normPdf(Z(x))/sd,color:'ink',regions:regions.map(r=>[...r,'accent'])}],markers,
+      brackets:chk('n-rule')?[{a:mu-3*sd,b:mu+3*sd,label:'99.73%'},{a:mu-2*sd,b:mu+2*sd,label:'95.45%'},{a:mu-sd,b:mu+sd,label:'68.27%'}]:null,
+      legend:[{c:'accent',soft:true,t:'Shaded area = probability'}],caption:'Tick labels show raw values; the blue row beneath shows standard deviations from the mean.',
+      hover:x=>`x = ${fmt(x,2)}   z = ${fmt(Z(x),3)}   P(X ≤ x) = ${fmt(cdf(x),4)}   P(X > x) = ${fmt(1-cdf(x),4)}`});
+  }};
+
+tools.zscore = { name:'Z-scores & percentiles', group:'Distributions',
+  lede:'Convert between raw scores, z-scores and percentiles.',
+  form:()=>`${S('z-mode','Convert',[['x2z','Raw score → z-score and percentile'],['z2x','z-score → raw score'],['p2z','Percentile → z-score and raw score']],'x2z')}
+    <div class="grid">${F('z-x','Raw score (x)',130)}${F('z-z','z-score',1.5)}${F('z-p','Percentile (0 to 100)',90)}</div>
+    <div class="grid">${F('z-mu','Mean (μ)',100)}${F('z-sd','Standard deviation (σ)',15)}</div>`,
+  run(){
+    const mode=val('z-mode'), mu=num('z-mu'), sd=num('z-sd'); show('z-x',mode==='x2z'); show('z-z',mode==='z2x'); show('z-p',mode==='p2z');
+    need(Number.isFinite(mu),'Enter a mean.'); need(sd>0,'Enter a standard deviation greater than 0.');
+    let z,x;
+    if(mode==='x2z'){ x=num('z-x'); need(Number.isFinite(x),'Enter a raw score.'); z=(x-mu)/sd; }
+    if(mode==='z2x'){ z=num('z-z'); need(Number.isFinite(z),'Enter a z-score.'); x=mu+z*sd; }
+    if(mode==='p2z'){ const p=num('z-p'); need(p>0&&p<100,'Enter a percentile between 0 and 100.'); z=M.normInv(p/100); x=mu+z*sd; }
+    const left=M.normCdf(z), right=M.normSf(z), two=2*M.normSf(Math.abs(z));
+    const dir = z>=0 ? 'above' : 'below';
+    render('r-zscore',{headline: mode==='z2x'?{label:'Raw score',value:fmt(x,4),sub:`z = ${fmt(z,4)}`}:mode==='p2z'?{label:'z-score',value:fmt(z,4),sub:`x = ${fmt(x,4)}`}:{label:'z-score',value:fmt(z,4),sub:`${fmt(left*100,2)}th percentile`},
+      say:`A score of ${fmt(x,2)} is ${fmt(Math.abs(z),2)} standard deviations ${dir} the mean and higher than ${pct(left)} of values.`,
+      rows:[['Raw score x',fmt(x,4)],['z = (x − μ) / σ',fmt(z,4)],['Area left, P(Z < z)',fmtP(left)],['Area right, P(Z > z)',fmtP(right)],['Beyond ±|z| (two tails)',fmtP(two)],['Between −|z| and +|z|',fmtP(1-two)]]});
+    const zm=Math.max(4,Math.min(10,Math.abs(z)+0.8));
+    Plot.set({kind:'Standard normal distribution',title:`Z ~ N(0, 1)   ·   z = ${fmt(z,3)}`,xmin:-zm,xmax:zm,
+      ticks:Array.from({length:2*Math.floor(zm)+1},(_,i)=>{const k=i-Math.floor(zm); return {x:k,label:(k>0?'+':'')+k,sub:fmt(mu+k*sd,1)};}).map(t=>({...t,label:t.label.replace('-','−')})),
+      curves:[{f:M.normPdf,color:'ink',regions:[[-Infinity,z,'accent']]}],markers:[{x:z,label:`z = ${fmt(z,2)}`,color:'accent'}],
+      legend:[{c:'accent',soft:true,t:'Percentile (area to the left)'}],caption:'Top row: z-scores. Blue row: the matching raw scores.',
+      hover:t=>`z = ${fmt(t,3)}   x = ${fmt(mu+t*sd,2)}   percentile = ${fmt(M.normCdf(t)*100,2)}`});
+  }};
+
+tools.discrete = { name:'Binomial & Poisson', group:'Distributions',
+  lede:'Exact probabilities for counts, with the normal approximation overlaid for comparison.',
+  form:()=>`${S('d-dist','Distribution',[['binom','Binomial (n trials, probability p)'],['pois','Poisson (average rate λ)']],'binom')}
+    <div class="grid">${F('d-n','Trials (n)',20)}${F('d-p','Probability of success (p)',0.3)}${F('d-lam','Average rate (λ)',4)}</div>
+    ${S('d-mode','Find',[['eq','P(X = k)'],['le','P(X ≤ k)'],['lt','P(X < k)'],['ge','P(X ≥ k)'],['gt','P(X > k)'],['between','P(k₁ ≤ X ≤ k₂)']],'le')}
+    <div class="grid">${F('d-k','k (or k₁)',8)}${F('d-k2','k₂',10)}</div>
+    ${CB('d-approx','Overlay the normal approximation',true)}`,
+  run(){
+    const dist=val('d-dist'), mode=val('d-mode'), bin=dist==='binom';
+    show('d-n',bin); show('d-p',bin); show('d-lam',!bin); show('d-k2',mode==='between'); setLabel('d-k',mode==='between'?'k₁':'k');
+    let n,p,lam,mu,sd,pmf,maxK;
+    if(bin){ n=num('d-n'); p=num('d-p'); need(Number.isInteger(n)&&n>=1&&n<=100000,'Enter a whole number of trials from 1 to 100,000.'); need(p>=0&&p<=1,'Enter a probability p between 0 and 1.');
+      mu=n*p; sd=Math.sqrt(n*p*(1-p)); pmf=k=>M.binomPmf(k,n,p); maxK=n; }
+    else { lam=num('d-lam'); need(lam>0&&lam<=1e5,'Enter a rate λ greater than 0.'); mu=lam; sd=Math.sqrt(lam); pmf=k=>M.poisPmf(k,lam); maxK=Math.ceil(lam+12*Math.sqrt(lam)+15); }
+    let k=num('d-k'), k2=num('d-k2'); need(Number.isInteger(k)&&k>=0,'Enter k as a whole number, 0 or more.');
+    if(mode==='between'){ need(Number.isInteger(k2)&&k2>=0,'Enter k₂ as a whole number.'); if(k2<k) [k,k2]=[k2,k]; }
+    const inSet={eq:j=>j===k,le:j=>j<=k,lt:j=>j<k,ge:j=>j>=k,gt:j=>j>k,between:j=>j>=k&&j<=k2}[mode];
+    // exact probability by summation over support
+    let prob=0; for(let j=0;j<=maxK;j++){ if(inSet(j)) prob+=pmf(j); } prob=Math.min(1,Math.max(0,prob));
+    const lbl={eq:`P(X = ${k})`,le:`P(X ≤ ${k})`,lt:`P(X < ${k})`,ge:`P(X ≥ ${k})`,gt:`P(X > ${k})`,between:`P(${k} ≤ X ≤ ${k2})`}[mode];
+    const cc={eq:[k-.5,k+.5],le:[-Infinity,k+.5],lt:[-Infinity,k-.5],ge:[k-.5,Infinity],gt:[k+.5,Infinity],between:[k-.5,k2+.5]}[mode];
+    const approx = sd>0 ? M.normCdf((cc[1]-mu)/sd)-M.normCdf((cc[0]-mu)/sd) : NaN;
+    const ok = bin ? (n*p>=10 && n*(1-p)>=10) : lam>=10;
+    render('r-discrete',{headline:{label:lbl,value:fmtP(prob),sub:pct(prob)},
+      rows:[['Mean (expected value)',fmt(mu,4)],['Variance',fmt(sd*sd,4)],['Standard deviation',fmt(sd,4)],['P(X = k)',fmtP(pmf(k))],['Normal approximation*',fmtP(approx)],['Approximation error',fmt(approx-prob,5)]],
+      note:`*Uses a continuity correction: the normal area from ${fmt(cc[0],1)} to ${fmt(cc[1],1)}. ${ok?'The rule of thumb is met':'The rule of thumb is not met'} (${bin?'np and n(1−p) both ≥ 10':'λ ≥ 10'}), so the approximation ${ok?'should be close':'may be off'}.`});
+    let lo=Math.max(0,Math.floor(mu-4.5*sd)), hi=Math.min(maxK,Math.ceil(mu+4.5*sd)); if(hi-lo<6){ hi=Math.min(maxK,lo+6); }
+    lo=Math.max(0,Math.min(lo,k-1)); hi=Math.min(maxK,Math.max(hi,(mode==='between'?k2:k)+1));
+    const bars=[]; for(let j=lo;j<=hi;j++) bars.push({x:j,y:pmf(j),c:inSet(j)?'accent':null});
+    Plot.set({kind:bin?'Binomial distribution':'Poisson distribution',title:bin?`X ~ B(n = ${n}, p = ${fmt(p)})`:`X ~ Poisson(λ = ${fmt(lam)})`,xmin:lo-0.6,xmax:hi+0.6,integer:true,barWidth:1,bars,
+      curves:chk('d-approx')&&sd>0?[{f:x=>M.normPdf((x-mu)/sd)/sd,color:'signal',dash:true}]:[],
+      legend:[{c:'accent',t:'Counts included'},{c:'muted',soft:true,t:'Other counts'}].concat(chk('d-approx')?[{c:'signal',line:true,t:`Normal N(${fmt(mu,2)}, ${fmt(sd,2)}²)`}]:[]),
+      caption:`Bars are exact probabilities for each count.`,
+      hover:x=>{ const j=Math.round(x); let c=0; for(let i=0;i<=j;i++) c+=pmf(i); return `k = ${j}   P(X = ${j}) = ${fmtP(pmf(j))}   P(X ≤ ${j}) = ${fmtP(Math.min(1,c))}`; }});
+  }};
+
+tools.pvalue = { name:'P-values & critical values', group:'Distributions',
+  lede:'Look up a p-value for a test statistic, or the critical value for a significance level, for z, t, χ² and F.',
+  form:()=>`<div class="grid">${S('pv-dist','Distribution',[['z','Standard normal (z)'],['t',"Student's t"],['chi','Chi-square (χ²)'],['f','F']],'t')}${S('pv-dir','Find',[['p','p-value from a statistic'],['crit','Critical value from α']],'p')}</div>
+    <div class="grid">${F('pv-stat','Test statistic',2.31)}${F('pv-alpha','Significance level (α)',0.05)}${F('pv-df1','Degrees of freedom',18)}${F('pv-df2','Denominator df',20)}</div>
+    ${S('pv-tail','Tail',[['two','Two-tailed'],['right','Right-tailed'],['left','Left-tailed']],'two')}`,
+  run(){
+    const d=val('pv-dist'), dir=val('pv-dir'); let tail=val('pv-tail');
+    show('pv-stat',dir==='p'); show('pv-alpha',dir==='crit'); show('pv-df1',d!=='z'); show('pv-df2',d==='f'); setLabel('pv-df1',d==='f'?'Numerator df':'Degrees of freedom');
+    const df1=num('pv-df1'), df2=num('pv-df2');
+    if(d!=='z') need(df1>0,'Enter degrees of freedom greater than 0.'); if(d==='f') need(df2>0,'Enter a denominator df greater than 0.');
+    const D={ z:{f:M.normPdf,cdf:M.normCdf,sf:M.normSf,q:M.normInv,sym:true,name:'Standard normal distribution',title:'Z ~ N(0, 1)'},
+      t:{f:x=>M.tPdf(x,df1),cdf:x=>M.tCdf(x,df1),sf:x=>M.tSf(x,df1),q:p=>M.tInv(p,df1),sym:true,name:"Student's t distribution",title:`t, df = ${fmt(df1)}`},
+      chi:{f:x=>M.chiPdf(x,df1),cdf:x=>M.chiCdf(x,df1),sf:x=>M.chiSf(x,df1),q:p=>M.chiInv(p,df1),name:'Chi-square distribution',title:`χ², df = ${fmt(df1)}`},
+      f:{f:x=>M.fPdf(x,df1,df2),cdf:x=>M.fCdf(x,df1,df2),sf:x=>M.fSf(x,df1,df2),q:p=>M.fInv(p,df1,df2),name:'F distribution',title:`F(${fmt(df1)}, ${fmt(df2)})`} }[d];
+    let regions=[], markers=[], head, rows=[], say;
+    if(dir==='p'){
+      const s=num('pv-stat'); need(Number.isFinite(s),'Enter a test statistic.'); if(!D.sym) need(s>=0,'χ² and F statistics cannot be negative.');
+      let p;
+      if(tail==='two'){ if(D.sym){ p=2*D.sf(Math.abs(s)); regions=[[-Infinity,-Math.abs(s)],[Math.abs(s),Infinity]]; markers=[{x:-Math.abs(s),label:fmt(-Math.abs(s),3),color:'accent'},{x:Math.abs(s),label:fmt(Math.abs(s),3),color:'accent'}]; }
+        else { const lower=D.cdf(s), upper=D.sf(s); p=Math.min(1,2*Math.min(lower,upper)); const other=lower<upper? D.q(1-lower) : D.q(upper); regions=[[-Infinity,Math.min(s,other)],[Math.max(s,other),Infinity]]; markers=[{x:s,label:fmt(s,3),color:'accent'}]; } }
+      else if(tail==='right'){ p=D.sf(s); regions=[[s,Infinity]]; markers=[{x:s,label:fmt(s,3),color:'accent'}]; }
+      else { p=D.cdf(s); regions=[[-Infinity,s]]; markers=[{x:s,label:fmt(s,3),color:'accent'}]; }
+      head={label:'p-value',value:fmtP(p),sub:pct(p)};
+      say=`If the null hypothesis were true, a statistic at least this extreme would happen ${pct(p)} of the time.`;
+      rows=[['Statistic',fmt(s,4)],['CDF, P(X ≤ s)',fmtP(D.cdf(s))],['Survival, P(X > s)',fmtP(D.sf(s))],['Significant at α = 0.10',p<.10?'Yes':'No'],['Significant at α = 0.05',p<.05?'Yes':'No'],['Significant at α = 0.01',p<.01?'Yes':'No']];
+    } else {
+      const a=num('pv-alpha'); need(a>0&&a<1,'Enter α between 0 and 1, such as 0.05.');
+      if(tail==='two'){ const lo=D.q(a/2), hi=D.q(1-a/2); regions=[[-Infinity,lo],[hi,Infinity]]; markers=[{x:lo,label:fmt(lo,3),color:'signal'},{x:hi,label:fmt(hi,3),color:'signal'}];
+        head={label:`Two-tailed critical values, α = ${fmt(a)}`,value:D.sym?`±${fmt(hi,4)}`:`${fmt(lo,4)} and ${fmt(hi,4)}`}; say=`Reject the null hypothesis when the statistic falls ${D.sym?`beyond ±${fmt(hi,4)}`:`below ${fmt(lo,4)} or above ${fmt(hi,4)}`}.`; }
+      else if(tail==='right'){ const c=D.q(1-a); regions=[[c,Infinity]]; markers=[{x:c,label:fmt(c,3),color:'signal'}]; head={label:`Right-tailed critical value, α = ${fmt(a)}`,value:fmt(c,4)}; say=`Reject the null hypothesis when the statistic is above ${fmt(c,4)}.`; }
+      else { const c=D.q(a); regions=[[-Infinity,c]]; markers=[{x:c,label:fmt(c,3),color:'signal'}]; head={label:`Left-tailed critical value, α = ${fmt(a)}`,value:fmt(c,4)}; say=`Reject the null hypothesis when the statistic is below ${fmt(c,4)}.`; }
+      rows=[['α',fmt(a)],['Confidence level',pct(1-a)]];
+    }
+    let xmin,xmax;
+    if(D.sym){ const ext=Math.max(...markers.map(m=>Math.abs(m.x)),0); const base=d==='t'&&df1<5?6:4.2; xmax=Math.min(Math.max(base,ext*1.15+0.3),60); xmin=-xmax; }
+    else { xmin=0; xmax=Math.max(D.q(0.997),...markers.map(m=>m.x*1.15)); }
+    render('r-pvalue',{headline:head,say,rows});
+    Plot.set({kind:D.name,title:D.title,xmin,xmax,curves:[{f:D.f,color:'ink',regions:regions.map(r=>[...r,dir==='p'?'accent':'signal'])}],markers,
+      legend:[dir==='p'?{c:'accent',soft:true,t:'p-value area'}:{c:'signal',soft:true,t:'Rejection region (α)'}],
+      caption:dir==='p'?'The shaded tail area is the p-value.':'The shaded tails add up to α.',
+      hover:x=>`x = ${fmt(x,3)}   P(X ≤ x) = ${fmtP(D.cdf(x))}   P(X > x) = ${fmtP(D.sf(x))}`});
+  }};
+
+tools.describe = { name:'Descriptive statistics', group:'Describe',
+  lede:'Paste a list of numbers to get center, spread, shape and outliers, plus a histogram with a fitted normal curve.',
+  form:()=>`${T('ds-data','Data',`72 85 91 64 78 88 95 70 82 77 69 84 90 73 81 79 86 62 75 98 83 71 80 87 76 68 93 74 89 58`,'Separate values with spaces, commas or new lines. You can paste a column from a spreadsheet.')}
+    <div class="grid">${F('ds-bins','Histogram bins (blank = automatic)','',{ph:'auto'})}</div>
+    ${CB('ds-pop','Treat as a whole population (divide by N, not n − 1)',false)}`,
+  run(){
+    const a=parseNums(val('ds-data'),'The data'); need(a.length>=2,'Enter at least two numbers.');
+    const n=a.length, s=[...a].sort((x,y)=>x-y), pop=chk('ds-pop'), mean=M.mean(a), sum=a.reduce((t,x)=>t+x,0);
+    const ss=a.reduce((t,x)=>t+(x-mean)**2,0), varr=ss/(pop?n:n-1), sd=Math.sqrt(varr);
+    const m2=ss/n, m3=a.reduce((t,x)=>t+(x-mean)**3,0)/n, m4=a.reduce((t,x)=>t+(x-mean)**4,0)/n;
+    const g1=m2>0?m3/Math.pow(m2,1.5):0, G1=n>2?g1*Math.sqrt(n*(n-1))/(n-2):NaN;
+    const g2=m2>0?m4/(m2*m2)-3:0, G2=n>3?((n+1)*g2+6)*(n-1)/((n-2)*(n-3)):NaN;
+    const q1=M.quantile(s,.25), med=M.quantile(s,.5), q3=M.quantile(s,.75), iqr=q3-q1, lf=q1-1.5*iqr, uf=q3+1.5*iqr;
+    const out=s.filter(x=>x<lf||x>uf);
+    const freq=new Map(); a.forEach(x=>freq.set(x,(freq.get(x)||0)+1)); const mf=Math.max(...freq.values());
+    const modes=mf>1?[...freq].filter(([,c])=>c===mf).map(([v])=>v).sort((x,y)=>x-y):[];
+    const modeTxt=modes.length===0?'None (all values unique)':modes.length>4?`${modes.length} values tie`:modes.map(v=>fmt(v)).join(', ')+` (×${mf})`;
+    lastDesc={mean,sd,n};
+    const sk=Number.isFinite(G1)? (Math.abs(G1)<0.5?'roughly symmetric':G1>0?'skewed right':'skewed left') : 'not measurable';
+    render('r-describe',{headline:{label:`Mean ± ${pop?'population':'sample'} standard deviation`,value:`${fmt(mean,3)} ± ${fmt(sd,3)}`,sub:`n = ${n}`},
+      say:`The middle half of the data runs from ${fmt(q1,2)} to ${fmt(q3,2)}, and the shape is ${sk}. ${out.length?`${out.length} value${out.length>1?'s are':' is'} flagged as outlier${out.length>1?'s':''}: ${out.slice(0,8).map(x=>fmt(x)).join(', ')}${out.length>8?'…':''}.`:'No values fall outside the 1.5 × IQR fences.'}`,
+      rows:[['Count (n)',n],['Sum',fmt(sum,4)],['Mean',fmt(mean,4)],['Median',fmt(med,4)],['Mode',modeTxt],['Minimum',fmt(s[0],4)],['Maximum',fmt(s[n-1],4)],['Range',fmt(s[n-1]-s[0],4)],
+        ['First quartile (Q1)',fmt(q1,4)],['Third quartile (Q3)',fmt(q3,4)],['Interquartile range',fmt(iqr,4)],[`Variance (${pop?'σ²':'s²'})`,fmt(varr,4)],[`Standard deviation (${pop?'σ':'s'})`,fmt(sd,4)],
+        ['Standard error of mean',fmt(sd/Math.sqrt(n),4)],['Coefficient of variation',mean!==0?pct(sd/Math.abs(mean)):'—'],['Skewness',fmt(G1,4)],['Excess kurtosis',fmt(G2,4)],['Outlier fences',`${fmt(lf,2)} to ${fmt(uf,2)}`]],
+      note:'Quartiles use linear interpolation (the same method as Excel QUARTILE.INC). Skewness and kurtosis are the bias-adjusted sample versions.',
+      actions:`<button type="button" class="btn" data-action="desc-normal">Open in Normal curve</button><button type="button" class="btn ghost" data-action="desc-test">Run a one-sample t-test</button>`});
+    const range=s[n-1]-s[0]||1; let bins=num('ds-bins'); if(!(bins>=1)){ const fd=2*iqr/Math.cbrt(n); bins = fd>0 ? Math.ceil(range/fd) : Math.ceil(Math.log2(n)+1); } bins=Math.max(1,Math.min(60,Math.round(bins)));
+    const w=range/bins, counts=Array(bins).fill(0); a.forEach(x=>{ counts[Math.min(bins-1,Math.floor((x-s[0])/w))]++; });
+    const bars=counts.map((c,i)=>({x:s[0]+w*(i+.5),y:c/(n*w),c:'hist',count:c,lo:s[0]+w*i}));
+    const pad=Math.max(w,sd*0.6), xmin=Math.min(s[0]-pad,mean-3.2*sd), xmax=Math.max(s[n-1]+pad,mean+3.2*sd);
+    Plot.set({kind:'Histogram with fitted normal curve',title:`N(${fmt(mean,2)}, ${fmt(sd,2)}²) fitted to ${n} values`,xmin,xmax,bars,barWidth:w,
+      curves:sd>0?[{f:x=>M.normPdf((x-mean)/sd)/sd,color:'ink'}]:[],markers:[{x:mean,label:'mean '+fmt(mean,2),color:'accent'},{x:med,label:'median '+fmt(med,2),color:'signal',dash:true}],
+      box:{lo:Math.max(s[0],s.find(x=>x>=lf)),q1,med,q3,hi:[...s].reverse().find(x=>x<=uf),out},
+      legend:[{c:'accent',soft:true,t:'Histogram'},{c:'ink',line:true,t:'Fitted normal'}],caption:`The strip at the top is a box plot: box = Q1 to Q3, orange line = median, circles = outliers. ${bins} bins of width ${fmt(w,3)}.`,
+      hover:x=>{ const b=bars.find(b=>x>=b.lo&&x<b.lo+w); return b?`bin ${fmt(b.lo,2)} to ${fmt(b.lo+w,2)}: ${b.count} value${b.count===1?'':'s'}   ·   normal model z = ${fmt((x-mean)/sd,2)}`:`x = ${fmt(x,2)}   z = ${fmt((x-mean)/sd,2)}`; }});
+  }};
+
+tools.ci = { name:'Confidence intervals', group:'Infer',
+  lede:'Estimate a mean, a proportion, or the difference between two groups, with a margin of error.',
+  form:()=>`<div class="grid">${S('ci-type','Estimate',[['meanz','Mean, σ known (z)'],['meant','Mean, σ unknown (t)'],['prop','Proportion'],['dmean','Difference of two means (Welch t)'],['dprop','Difference of two proportions']],'meant')}${S('ci-conf','Confidence level',CONF,'0.95')}</div>
+    <div class="grid">${F('ci-xbar','Sample mean (x̄)',72.4)}${F('ci-s','Sample SD (s)',8.6)}${F('ci-n','Sample size (n)',36)}${F('ci-x','Successes (x)',124)}${F('ci-pn','Sample size (n)',200)}</div>
+    <div class="grid">${F('ci-xbar2','Group 2 mean',68.1)}${F('ci-s2','Group 2 SD',9.4)}${F('ci-n2','Group 2 size',40)}${F('ci-x2','Group 2 successes',98)}${F('ci-pn2','Group 2 size',210)}</div>`,
+  run(){
+    const t=val('ci-type'), conf=Number(val('ci-conf')), isM=t==='meanz'||t==='meant'||t==='dmean', two=t[0]==='d';
+    ['ci-xbar','ci-s','ci-n'].forEach(i=>show(i,isM)); ['ci-x','ci-pn'].forEach(i=>show(i,!isM));
+    ['ci-xbar2','ci-s2','ci-n2'].forEach(i=>show(i,t==='dmean')); ['ci-x2','ci-pn2'].forEach(i=>show(i,t==='dprop'));
+    setLabel('ci-s',t==='meanz'?'Population SD (σ)':two?'Group 1 SD':'Sample SD (s)'); setLabel('ci-xbar',two?'Group 1 mean':'Sample mean (x̄)'); setLabel('ci-n',two?'Group 1 size':'Sample size (n)');
+    setLabel('ci-x',two?'Group 1 successes':'Successes (x)'); setLabel('ci-pn',two?'Group 1 size':'Sample size (n)');
+    let est,se,df=null,param,extra=[],note='';
+    if(t==='meanz'||t==='meant'){ const x=num('ci-xbar'),s=num('ci-s'),n=num('ci-n'); need(Number.isFinite(x),'Enter the sample mean.'); need(s>0,'Enter a standard deviation greater than 0.'); need(n>=2,'Enter a sample size of at least 2.');
+      est=x; se=s/Math.sqrt(n); if(t==='meant') df=n-1; param='population mean (μ)'; }
+    if(t==='prop'){ const x=num('ci-x'),n=num('ci-pn'); need(n>=1,'Enter a sample size.'); need(x>=0&&x<=n,'Successes must be between 0 and the sample size.');
+      est=x/n; se=Math.sqrt(est*(1-est)/n); param='population proportion (p)';
+      const z=M.normInv(1-(1-conf)/2), den=1+z*z/n, ctr=(est+z*z/(2*n))/den, hw=z*Math.sqrt(est*(1-est)/n+z*z/(4*n*n))/den;
+      extra.push(['Wilson interval (better for small n)',`${fmt(ctr-hw,4)} to ${fmt(ctr+hw,4)}`]);
+      if(n*est<10||n*(1-est)<10) note='Fewer than 10 successes or failures: trust the Wilson interval over the standard (Wald) one.'; }
+    if(t==='dmean'){ const x1=num('ci-xbar'),s1=num('ci-s'),n1=num('ci-n'),x2=num('ci-xbar2'),s2=num('ci-s2'),n2=num('ci-n2');
+      need([x1,x2].every(Number.isFinite),'Enter both group means.'); need(s1>0&&s2>0,'Enter standard deviations greater than 0.'); need(n1>=2&&n2>=2,'Each group needs at least 2 observations.');
+      const v1=s1*s1/n1,v2=s2*s2/n2; est=x1-x2; se=Math.sqrt(v1+v2); df=(v1+v2)**2/(v1*v1/(n1-1)+v2*v2/(n2-1)); param='difference in means (μ₁ − μ₂)'; }
+    if(t==='dprop'){ const x1=num('ci-x'),n1=num('ci-pn'),x2=num('ci-x2'),n2=num('ci-pn2'); need(n1>=1&&n2>=1,'Enter both sample sizes.'); need(x1>=0&&x1<=n1&&x2>=0&&x2<=n2,'Successes must be between 0 and each sample size.');
+      const p1=x1/n1,p2=x2/n2; est=p1-p2; se=Math.sqrt(p1*(1-p1)/n1+p2*(1-p2)/n2); param='difference in proportions (p₁ − p₂)'; extra.push(['p̂₁',fmt(p1,4)],['p̂₂',fmt(p2,4)]); }
+    need(se>0,'The standard error is 0, so there is no spread to build an interval from. Check the inputs.');
+    const crit = df==null ? M.normInv(1-(1-conf)/2) : M.tInv(1-(1-conf)/2,df), moe=crit*se, lo=est-moe, hi=est+moe;
+    const cl=pct(conf).replace('.00','');
+    render('r-ci',{headline:{label:`${cl} confidence interval for the ${param}`,value:`${fmt(lo,4)} to ${fmt(hi,4)}`,sub:`${fmt(est,4)} ± ${fmt(moe,4)}`},
+      say:`We are ${cl} confident the ${param} is between ${fmt(lo,4)} and ${fmt(hi,4)}.${two? (lo>0||hi<0?' The interval excludes 0, so the groups differ at this confidence level.':' The interval includes 0, so a difference of zero is plausible.'):''}`,
+      rows:[['Point estimate',fmt(est,4)],['Standard error',fmt(se,4)],[df==null?'Critical z*':'Critical t*',fmt(crit,4)],...(df!=null?[['Degrees of freedom',fmt(df,2)]]:[]),['Margin of error',fmt(moe,4)],['Lower bound',fmt(lo,4)],['Upper bound',fmt(hi,4)],...extra],note});
+    const f = df==null ? x=>M.normPdf((x-est)/se)/se : x=>M.tPdf((x-est)/se,df)/se, cdf = df==null ? x=>M.normCdf((x-est)/se) : x=>M.tCdf((x-est)/se,df);
+    let xmin=est-4.2*se, xmax=est+4.2*se; const mk=[{x:lo,label:fmt(lo,3),color:'accent'},{x:est,label:'estimate '+fmt(est,3),color:'ink'},{x:hi,label:fmt(hi,3),color:'accent'}];
+    if(two && 0>xmin-2*se && 0<xmax+2*se){ xmin=Math.min(xmin,-0.3*se); xmax=Math.max(xmax,0.3*se); mk.push({x:0,label:'0',color:'signal',dash:true}); }
+    Plot.set({kind:'Sampling distribution of the estimate',title:`${df==null?'Normal':'t'}, centered at ${fmt(est,3)}, SE = ${fmt(se,3)}`,xmin,xmax,
+      curves:[{f,color:'ink',regions:[[lo,hi,'accent']]}],markers:mk,legend:[{c:'accent',soft:true,t:`Middle ${cl}`}],
+      caption:`The interval covers the middle ${cl} of the estimate's sampling distribution: estimate ± critical value × standard error.`,
+      hover:x=>`value = ${fmt(x,3)}   distance from estimate = ${fmt((x-est)/se,2)} SE   area left = ${fmt(cdf(x),4)}`});
+  }};
+
+tools.test = { name:'Hypothesis tests', group:'Infer',
+  lede:'z and t tests for means and proportions, with the rejection region and p-value drawn on the null distribution.',
+  form:()=>`<div class="grid">${S('ht-type','Test',[['z1','One-sample z (σ known)'],['t1','One-sample t'],['t2','Two-sample t (independent groups)'],['tp','Paired t (before / after)'],['p1','One-proportion z'],['p2','Two-proportion z']],'t1')}
+    ${S('ht-alt','Alternative hypothesis',[['ne','Two-tailed (≠)'],['lt','Left-tailed (<)'],['gt','Right-tailed (>)']],'ne')}${F('ht-alpha','Significance level (α)',0.05)}</div>
+    <div class="grid">${F('ht-xbar','Sample mean (x̄)',52.3)}${F('ht-mu0','Hypothesized mean (μ₀)',50)}${F('ht-s','Sample SD (s)',6.1)}${F('ht-n','Sample size (n)',25)}</div>
+    <div class="grid">${F('ht-x1','Group 1 mean',78.2)}${F('ht-s1','Group 1 SD',10.5)}${F('ht-n1','Group 1 size',30)}${F('ht-x2','Group 2 mean',73.9)}${F('ht-s2','Group 2 SD',12.1)}${F('ht-n2','Group 2 size',28)}</div>
+    ${CB('ht-pool','Assume equal variances (pooled t-test)',false)}
+    <div class="grid">${T('ht-before','Before (or condition A)','12.1 14.3 11.8 15.2 13.4 12.9 14.8 13.1 12.5 15.6')}${T('ht-after','After (or condition B)','13.4 15.1 12.2 16.8 14.0 13.8 15.9 13.0 13.6 16.4')}</div>
+    <div class="grid">${F('ht-px','Successes (x)',58)}${F('ht-pn','Sample size (n)',100)}${F('ht-p0','Hypothesized proportion (p₀)',0.5)}</div>
+    <div class="grid">${F('ht-xa','Group 1 successes',45)}${F('ht-na','Group 1 size',120)}${F('ht-xb','Group 2 successes',30)}${F('ht-nb','Group 2 size',115)}</div>`,
+  run(){
+    const t=val('ht-type'), alt=val('ht-alt'), a=num('ht-alpha');
+    ['ht-xbar','ht-mu0','ht-s','ht-n'].forEach(i=>show(i,t==='z1'||t==='t1')); ['ht-x1','ht-s1','ht-n1','ht-x2','ht-s2','ht-n2','ht-pool'].forEach(i=>show(i,t==='t2'));
+    ['ht-before','ht-after'].forEach(i=>show(i,t==='tp')); ['ht-px','ht-pn','ht-p0'].forEach(i=>show(i,t==='p1')); ['ht-xa','ht-na','ht-xb','ht-nb'].forEach(i=>show(i,t==='p2'));
+    setLabel('ht-s',t==='z1'?'Population SD (σ)':'Sample SD (s)'); need(a>0&&a<1,'Enter α between 0 and 1, such as 0.05.');
+    const sym={ne:'≠',lt:'<',gt:'>'}[alt]; let stat,df=null,hyp,rows=[],effect=null,param;
+    if(t==='z1'||t==='t1'){ const x=num('ht-xbar'),m0=num('ht-mu0'),s=num('ht-s'),n=num('ht-n'); need(Number.isFinite(x)&&Number.isFinite(m0),'Enter the sample mean and the hypothesized mean.'); need(s>0,'Enter a standard deviation greater than 0.'); need(n>=2,'Enter a sample size of at least 2.');
+      const se=s/Math.sqrt(n); stat=(x-m0)/se; if(t==='t1') df=n-1; hyp=`H₀: μ = ${fmt(m0)}   ·   H₁: μ ${sym} ${fmt(m0)}`; effect=(x-m0)/s; rows.push(['Difference (x̄ − μ₀)',fmt(x-m0,4)],['Standard error',fmt(se,4)]); param='mean'; }
+    if(t==='t2'){ const x1=num('ht-x1'),s1=num('ht-s1'),n1=num('ht-n1'),x2=num('ht-x2'),s2=num('ht-s2'),n2=num('ht-n2'); need([x1,x2].every(Number.isFinite),'Enter both group means.'); need(s1>0&&s2>0,'Enter standard deviations greater than 0.'); need(n1>=2&&n2>=2,'Each group needs at least 2 observations.');
+      const sp=Math.sqrt(((n1-1)*s1*s1+(n2-1)*s2*s2)/(n1+n2-2)); let se;
+      if(chk('ht-pool')){ se=sp*Math.sqrt(1/n1+1/n2); df=n1+n2-2; } else { const v1=s1*s1/n1,v2=s2*s2/n2; se=Math.sqrt(v1+v2); df=(v1+v2)**2/(v1*v1/(n1-1)+v2*v2/(n2-1)); }
+      stat=(x1-x2)/se; effect=(x1-x2)/sp; hyp=`H₀: μ₁ = μ₂   ·   H₁: μ₁ ${sym} μ₂`; rows.push(['Difference (x̄₁ − x̄₂)',fmt(x1-x2,4)],['Standard error',fmt(se,4)],['Method',chk('ht-pool')?'Pooled variance':'Welch (unequal variances)']); param='difference in means'; }
+    if(t==='tp'){ const b=parseNums(val('ht-before'),'The first column'), af=parseNums(val('ht-after'),'The second column'); need(b.length===af.length,`Both columns need the same number of values (now ${b.length} and ${af.length}).`); need(b.length>=2,'Enter at least two pairs.');
+      const d=af.map((v,i)=>v-b[i]), n=d.length, md=M.mean(d), sd=Math.sqrt(d.reduce((s,x)=>s+(x-md)**2,0)/(n-1)); need(sd>0,'Every difference is identical, so the t statistic is undefined.');
+      stat=md/(sd/Math.sqrt(n)); df=n-1; effect=md/sd; hyp=`H₀: μ_d = 0   ·   H₁: μ_d ${sym} 0   (d = after − before)`; rows.push(['Pairs',n],['Mean difference',fmt(md,4)],['SD of differences',fmt(sd,4)]); param='mean difference'; }
+    if(t==='p1'){ const x=num('ht-px'),n=num('ht-pn'),p0=num('ht-p0'); need(n>=1,'Enter a sample size.'); need(x>=0&&x<=n,'Successes must be between 0 and n.'); need(p0>0&&p0<1,'Enter p₀ between 0 and 1.');
+      const ph=x/n; stat=(ph-p0)/Math.sqrt(p0*(1-p0)/n); hyp=`H₀: p = ${fmt(p0)}   ·   H₁: p ${sym} ${fmt(p0)}`; rows.push(['Sample proportion p̂',fmt(ph,4)],['Expected successes np₀',fmt(n*p0,2)]); param='proportion'; }
+    if(t==='p2'){ const x1=num('ht-xa'),n1=num('ht-na'),x2=num('ht-xb'),n2=num('ht-nb'); need(n1>=1&&n2>=1,'Enter both sample sizes.'); need(x1>=0&&x1<=n1&&x2>=0&&x2<=n2,'Successes must be between 0 and each sample size.');
+      const p1=x1/n1,p2=x2/n2,pp=(x1+x2)/(n1+n2), se=Math.sqrt(pp*(1-pp)*(1/n1+1/n2)); need(se>0,'The pooled proportion is 0 or 1, so the test is undefined.');
+      stat=(p1-p2)/se; hyp=`H₀: p₁ = p₂   ·   H₁: p₁ ${sym} p₂`; rows.push(['p̂₁',fmt(p1,4)],['p̂₂',fmt(p2,4)],['Pooled p̂',fmt(pp,4)]); param='difference in proportions'; }
+    const D=nullDist(df); let p, crit, rej;
+    if(alt==='ne'){ p=2*D.sf(Math.abs(stat)); crit=D.q(1-a/2); rej=[[-Infinity,-crit],[crit,Infinity]]; }
+    else if(alt==='lt'){ p=D.cdf(stat); crit=D.q(a); rej=[[-Infinity,crit]]; }
+    else { p=D.sf(stat); crit=D.q(1-a); rej=[[crit,Infinity]]; }
+    const pr = alt==='ne'?[[-Infinity,-Math.abs(stat)],[Math.abs(stat),Infinity]]:alt==='lt'?[[-Infinity,stat]]:[[stat,Infinity]];
+    const reject=p<a, sname=df==null?'z':'t';
+    rows.unshift([`Test statistic (${sname})`,fmt(stat,4)],...(df!=null?[['Degrees of freedom',fmt(df,2)]]:[]),['p-value',fmtP(p)],[`Critical value${alt==='ne'?'s':''}`,alt==='ne'?`±${fmt(crit,4)}`:fmt(crit,4)]);
+    if(effect!=null){ const e=Math.abs(effect); rows.push(["Cohen's d",`${fmt(effect,3)} (${e<0.2?'negligible':e<0.5?'small':e<0.8?'medium':'large'})`]); }
+    render('r-test',{hyp,headline:{label:'p-value',value:fmtP(p),sub:`${sname} = ${fmt(stat,3)}`},verdict:{text:reject?`Reject H₀ at α = ${fmt(a)}`:`Fail to reject H₀ at α = ${fmt(a)}`,tone:reject?'reject':'keep'},
+      say: reject ? `p = ${fmtP(p)} is below α = ${fmt(a)}, so the data give significant evidence that the ${param} is ${{ne:'different from',lt:'less than',gt:'greater than'}[alt]} the null value.` : `p = ${fmtP(p)} is not below α = ${fmt(a)}, so the data don't give enough evidence to reject the null hypothesis. That isn't proof the null is true.`, rows});
+    const ext=Math.max(Math.abs(stat),Math.abs(crit)); const xm=Math.min(Math.max(df!=null&&df<5?6:4.2,ext*1.15+0.3),60);
+    const mk=[{x:stat,label:`${sname} = ${fmt(stat,2)}`,color:'accent'}].concat(alt==='ne'?[{x:-crit,label:fmt(-crit,2),color:'signal',dash:true},{x:crit,label:fmt(crit,2),color:'signal',dash:true}]:[{x:crit,label:fmt(crit,2),color:'signal',dash:true}]);
+    Plot.set({kind:'Null distribution · '+(df==null?'z':'t'),title:D.title,xmin:-xm,xmax:xm,
+      curves:[{f:D.f,color:'muted',width:1,regions:rej.map(r=>[...r,'signal'])},{f:D.f,color:'ink',regions:pr.map(r=>[...r,'accent'])}],markers:mk,
+      legend:[{c:'signal',soft:true,t:'Rejection region (α)'},{c:'accent',soft:true,t:'p-value'}],caption:'If the test statistic lands in the orange region, reject H₀. The blue area is the p-value.',
+      hover:x=>`${sname} = ${fmt(x,3)}   P(below) = ${fmtP(D.cdf(x))}   P(above) = ${fmtP(D.sf(x))}`});
+  }};
+
+tools.chisq = { name:'Chi-square tests', group:'Infer',
+  lede:'Test whether counts match expected proportions, or whether two categorical variables are related.',
+  form:()=>`<div class="grid">${S('cs-mode','Test',[['gof','Goodness of fit (one variable)'],['ind','Independence (two-way table)']],'ind')}${F('cs-alpha','Significance level (α)',0.05)}</div>
+    ${T('cs-obs','Observed counts','50 30 20')}${T('cs-exp','Expected proportions or counts (blank = all equal)','0.4 0.4 0.2')}
+    ${T('cs-tab','Contingency table (one row per line)','32 18 10\n21 26 13\n12 20 28','Rows on separate lines, columns separated by spaces or commas.')}`,
+  run(){
+    const mode=val('cs-mode'), a=num('cs-alpha'); show('cs-obs',mode==='gof'); show('cs-exp',mode==='gof'); show('cs-tab',mode==='ind'); need(a>0&&a<1,'Enter α between 0 and 1.');
+    let chi=0, df, html, rows=[], warn='';
+    if(mode==='gof'){ const o=parseNums(val('cs-obs'),'Observed counts'); need(o.length>=2,'Enter at least two category counts.'); need(o.every(x=>x>=0),'Counts cannot be negative.');
+      const N=o.reduce((s,x)=>s+x,0); need(N>0,'The counts add up to 0.');
+      let e = val('cs-exp').trim()==='' ? o.map(()=>1/o.length) : parseNums(val('cs-exp'),'Expected values'); need(e.length===o.length,`Enter ${o.length} expected values, one per category (now ${e.length}).`); need(e.every(x=>x>0),'Expected values must be greater than 0.');
+      const es=e.reduce((s,x)=>s+x,0); e=e.map(x=>x/es*N);
+      const contrib=o.map((x,i)=>(x-e[i])**2/e[i]); chi=contrib.reduce((s,x)=>s+x,0); df=o.length-1;
+      html=table(['Category','Observed','Expected','(O − E)² / E'],o.map((x,i)=>[i+1,fmt(x),fmt(e[i],2),fmt(contrib[i],4)]));
+      if(e.some(x=>x<5)) warn='Some expected counts are below 5, so the chi-square approximation may be unreliable.';
+      rows=[['Total count',N],['Categories',o.length]];
+    } else {
+      const lines=val('cs-tab').split(/\n/).map(l=>l.trim()).filter(Boolean).map((l,i)=>parseNums(l,`Row ${i+1}`));
+      need(lines.length>=2,'Enter at least two rows.'); const c=lines[0].length; need(c>=2,'Each row needs at least two columns.'); need(lines.every(r=>r.length===c),'Every row needs the same number of columns.'); need(lines.every(r=>r.every(x=>x>=0)),'Counts cannot be negative.');
+      const rt=lines.map(r=>r.reduce((s,x)=>s+x,0)), ct=Array.from({length:c},(_,j)=>lines.reduce((s,r)=>s+r[j],0)), N=rt.reduce((s,x)=>s+x,0);
+      need(rt.every(x=>x>0)&&ct.every(x=>x>0),'A row or column adds up to 0. Remove it and try again.');
+      const E=lines.map((r,i)=>r.map((_,j)=>rt[i]*ct[j]/N)); lines.forEach((r,i)=>r.forEach((x,j)=>{ chi+=(x-E[i][j])**2/E[i][j]; })); df=(lines.length-1)*(c-1);
+      const V=Math.sqrt(chi/(N*(Math.min(lines.length,c)-1)));
+      html=`<p class="note">Each cell shows observed (expected).</p>`+table(['',...Array.from({length:c},(_,j)=>'Col '+(j+1)),'Total'],[...lines.map((r,i)=>['Row '+(i+1),...r.map((x,j)=>`${fmt(x)} (${fmt(E[i][j],1)})`),fmt(rt[i])]),['Total',...ct.map(x=>fmt(x)),fmt(N)]]);
+      if(E.flat().some(x=>x<5)) warn='Some expected counts are below 5, so the chi-square approximation may be unreliable. Consider combining categories.';
+      rows=[['Total count',N],['Table size',`${lines.length} × ${c}`],["Cramér's V",`${fmt(V,3)} (${V<0.1?'negligible':V<0.3?'weak':V<0.5?'moderate':'strong'} association)`]];
+    }
+    const p=M.chiSf(chi,df), crit=M.chiInv(1-a,df), reject=p<a;
+    rows.unshift(['χ² statistic',fmt(chi,4)],['Degrees of freedom',df],['p-value',fmtP(p)],['Critical value',fmt(crit,4)]);
+    render('r-chisq',{hyp:mode==='gof'?'H₀: the counts follow the expected proportions':'H₀: the row and column variables are independent',
+      headline:{label:'p-value',value:fmtP(p),sub:`χ² = ${fmt(chi,3)}, df = ${df}`},verdict:{text:reject?`Reject H₀ at α = ${fmt(a)}`:`Fail to reject H₀ at α = ${fmt(a)}`,tone:reject?'reject':'keep'},
+      say: reject ? (mode==='gof'?'The observed counts differ significantly from the expected pattern.':'The two variables appear to be related.') : (mode==='gof'?'The observed counts are consistent with the expected pattern.':'There is not enough evidence that the two variables are related.'),
+      rows,html,note:warn});
+    const xmax=Math.max(M.chiInv(0.998,df),chi*1.15,crit*1.2);
+    Plot.set({kind:'Chi-square distribution',title:`χ², df = ${df}`,xmin:0,xmax,curves:[{f:x=>M.chiPdf(x,df),color:'muted',width:1,regions:[[crit,Infinity,'signal']]},{f:x=>M.chiPdf(x,df),color:'ink',regions:[[chi,Infinity,'accent']]}],
+      markers:[{x:chi,label:`χ² = ${fmt(chi,2)}`,color:'accent'},{x:crit,label:`critical ${fmt(crit,2)}`,color:'signal',dash:true}],legend:[{c:'signal',soft:true,t:'Rejection region'},{c:'accent',soft:true,t:'p-value'}],
+      caption:'Chi-square tests are always right-tailed: large values mean the observed counts are far from what H₀ predicts.',hover:x=>`χ² = ${fmt(x,3)}   P(χ² > x) = ${fmtP(M.chiSf(x,df))}`});
+  }};
+
+tools.anova = { name:'One-way ANOVA', group:'Infer',
+  lede:'Compare the means of three or more groups at once.',
+  form:()=>`${T('an-data','Groups (one per line, optional label before a colon)','Method A: 85 90 88 75 95 82 79\nMethod B: 78 82 75 80 72 77 74\nMethod C: 92 88 95 90 85 96 89','Example: “Control: 12 15 14”.')}${F('an-alpha','Significance level (α)',0.05)}`,
+  run(){
+    const a=num('an-alpha'); need(a>0&&a<1,'Enter α between 0 and 1.');
+    const groups=val('an-data').split(/\n/).map(l=>l.trim()).filter(Boolean).map((l,i)=>{ const m=l.match(/^([^:]*):(.*)$/); const label=m?m[1].trim():`Group ${i+1}`; return {label,v:parseNums(m?m[2]:l,label)}; });
+    need(groups.length>=2,'Enter at least two groups, one per line.'); need(groups.every(g=>g.v.length>=1),'Every group needs at least one value.');
+    const all=groups.flatMap(g=>g.v), N=all.length, k=groups.length, gm=M.mean(all); need(N>k,'There need to be more values than groups.');
+    groups.forEach(g=>{ g.n=g.v.length; g.m=M.mean(g.v); g.sd=g.n>1?Math.sqrt(g.v.reduce((s,x)=>s+(x-g.m)**2,0)/(g.n-1)):NaN; });
+    const ssb=groups.reduce((s,g)=>s+g.n*(g.m-gm)**2,0), ssw=groups.reduce((s,g)=>s+g.v.reduce((t,x)=>t+(x-g.m)**2,0),0), dfb=k-1, dfw=N-k, msb=ssb/dfb, msw=ssw/dfw;
+    need(msw>0,'There is no variation within the groups, so F is undefined.');
+    const Fs=msb/msw, p=M.fSf(Fs,dfb,dfw), crit=M.fInv(1-a,dfb,dfw), eta=ssb/(ssb+ssw), reject=p<a;
+    render('r-anova',{hyp:`H₀: all ${k} group means are equal`,headline:{label:'p-value',value:fmtP(p),sub:`F(${dfb}, ${dfw}) = ${fmt(Fs,3)}`},verdict:{text:reject?`Reject H₀ at α = ${fmt(a)}`:`Fail to reject H₀ at α = ${fmt(a)}`,tone:reject?'reject':'keep'},
+      say:reject?`At least one group mean differs from the others. Group differences explain ${pct(eta)} of the total variation (η²). Follow up with pairwise comparisons to see which groups differ.`:`The group means are not significantly different. Group differences explain ${pct(eta)} of the total variation.`,
+      html:table(['Source','SS','df','MS','F','p'],[['Between groups',fmt(ssb,3),dfb,fmt(msb,3),fmt(Fs,3),fmtP(p)],['Within groups',fmt(ssw,3),dfw,fmt(msw,3),'',''],['Total',fmt(ssb+ssw,3),N-1,'','','']])
+        +table(['Group','n','Mean','SD'],groups.map(g=>[esc(g.label),g.n,fmt(g.m,3),fmt(g.sd,3)])),
+      rows:[['Critical F',fmt(crit,4)],['Effect size η²',`${fmt(eta,3)} (${eta<0.01?'negligible':eta<0.06?'small':eta<0.14?'medium':'large'})`],['Grand mean',fmt(gm,4)]]});
+    const xmax=Math.max(M.fInv(0.995,dfb,dfw),Fs*1.15,crit*1.25);
+    Plot.set({kind:'F distribution',title:`F(${dfb}, ${dfw})`,xmin:0,xmax,curves:[{f:x=>M.fPdf(x,dfb,dfw),color:'muted',width:1,regions:[[crit,Infinity,'signal']]},{f:x=>M.fPdf(x,dfb,dfw),color:'ink',regions:[[Fs,Infinity,'accent']]}],
+      markers:[{x:Fs,label:`F = ${fmt(Fs,2)}`,color:'accent'},{x:crit,label:`critical ${fmt(crit,2)}`,color:'signal',dash:true}],legend:[{c:'signal',soft:true,t:'Rejection region'},{c:'accent',soft:true,t:'p-value'}],
+      caption:'F compares variation between group means to variation within groups. Values far above 1 point to real differences.',hover:x=>`F = ${fmt(x,3)}   P(F > x) = ${fmtP(M.fSf(x,dfb,dfw))}`});
+  }};
+
+tools.regress = { name:'Correlation & regression', group:'Relationships',
+  lede:'Fit a least-squares line, measure correlation, test the slope, and make predictions.',
+  form:()=>`<div class="grid">${T('rg-x','X values (predictor)','2 3 4 4 5 6 6 7 8 9 10 11')}${T('rg-y','Y values (response)','58 61 65 63 70 72 75 74 80 83 88 90')}</div>
+    <div class="grid">${F('rg-xp','Predict y at x =',8.5)}${S('rg-conf','Confidence level',CONF,'0.95')}</div>`,
+  run(){
+    const x=parseNums(val('rg-x'),'X values'), y=parseNums(val('rg-y'),'Y values'); need(x.length===y.length,`X and Y need the same number of values (now ${x.length} and ${y.length}).`); need(x.length>=3,'Enter at least three pairs.');
+    const n=x.length, mx=M.mean(x), my=M.mean(y); let sxx=0,syy=0,sxy=0; for(let i=0;i<n;i++){ sxx+=(x[i]-mx)**2; syy+=(y[i]-my)**2; sxy+=(x[i]-mx)*(y[i]-my); }
+    need(sxx>0,'All X values are the same, so a slope cannot be estimated.');
+    const b1=sxy/sxx, b0=my-b1*mx, r=syy>0?sxy/Math.sqrt(sxx*syy):NaN, sse=y.reduce((s,v,i)=>s+(v-(b0+b1*x[i]))**2,0), df=n-2, se=df>0?Math.sqrt(sse/df):NaN, seb=se/Math.sqrt(sxx);
+    const tval=seb>0?b1/seb:Infinity, p=seb>0?2*M.tSf(Math.abs(tval),df):0, conf=Number(val('rg-conf')), tc=M.tInv(1-(1-conf)/2,df), xp=num('rg-xp'), yp=b0+b1*xp;
+    const sePred=Number.isFinite(xp)?se*Math.sqrt(1+1/n+(xp-mx)**2/sxx):NaN, seMean=Number.isFinite(xp)?se*Math.sqrt(1/n+(xp-mx)**2/sxx):NaN;
+    const ar=Math.abs(r), strength=ar<0.1?'no meaningful':ar<0.3?'a weak':ar<0.5?'a moderate':ar<0.7?'a fairly strong':'a strong', cl=pct(conf).replace('.00','');
+    render('r-regress',{headline:{label:'Regression line',value:`ŷ = ${fmt(b0,4)} ${b1<0?'−':'+'} ${fmt(Math.abs(b1),4)}x`,sub:`r = ${fmt(r,4)}   r² = ${fmt(r*r,4)}`},
+      say:`There is ${strength} ${r>0?'positive':'negative'} linear relationship. Each 1-unit increase in x goes with a ${fmt(Math.abs(b1),3)}-unit ${b1>0?'increase':'decrease'} in predicted y, and the line explains ${pct(r*r)} of the variation in y.`,
+      verdict:{text:p<0.05?'Slope is significant (p < 0.05)':'Slope is not significant (p ≥ 0.05)',tone:p<0.05?'reject':'keep'},
+      rows:[['Pairs (n)',n],['Slope (b₁)',fmt(b1,4)],['Intercept (b₀)',fmt(b0,4)],['Correlation (r)',fmt(r,4)],['R²',fmt(r*r,4)],['Std. error of estimate',fmt(se,4)],['SE of slope',fmt(seb,4)],['t for slope',fmt(tval,4)],['p-value (slope ≠ 0)',fmtP(p)],[`${cl} CI for slope`,`${fmt(b1-tc*seb,4)} to ${fmt(b1+tc*seb,4)}`],
+        ...(Number.isFinite(xp)?[[`Predicted ŷ at x = ${fmt(xp)}`,fmt(yp,4)],[`${cl} CI for mean y`,`${fmt(yp-tc*seMean,3)} to ${fmt(yp+tc*seMean,3)}`],[`${cl} prediction interval`,`${fmt(yp-tc*sePred,3)} to ${fmt(yp+tc*sePred,3)}`]]:[])],
+      note:Number.isFinite(xp)&&(xp<Math.min(...x)||xp>Math.max(...x))?'The prediction is outside the range of the data (extrapolation), so treat it with caution.':''});
+    const xs=[...x, ...(Number.isFinite(xp)?[xp]:[])], ys=[...y, ...(Number.isFinite(xp)?[yp]:[])]; const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys), px=(x1-x0)*0.08||1, py=(y1-y0)*0.12||1;
+    Plot.set({kind:'Scatter plot with least-squares line',title:`ŷ = ${fmt(b0,3)} ${b1<0?'−':'+'} ${fmt(Math.abs(b1),3)}x   ·   r = ${fmt(r,3)}`,scatter:true,xmin:x0-px,xmax:x1+px,ymin:y0-py,ymax:y1+py,points:x.map((v,i)=>[v,y[i]]),line:{m:b1,b:b0},pred:Number.isFinite(xp)?[xp,yp]:null,
+      legend:[{c:'accent',soft:true,t:'Observations'},{c:'signal',line:true,t:'Fitted line'}].concat(Number.isFinite(xp)?[{c:'signal',t:'Prediction'}]:[]),caption:'Vertical distance from each point to the line is its residual. The line minimizes the sum of squared residuals.',
+      hover:v=>`x = ${fmt(v,3)}   predicted ŷ = ${fmt(b0+b1*v,3)}`});
+  }};
+
+tools.samplesize = { name:'Sample size & power', group:'Plan',
+  lede:'Work out how many observations you need before you collect data.',
+  form:()=>`<div class="grid">${S('ss-type','Goal',[['mean','Estimate a mean within ±E'],['prop','Estimate a proportion within ±E'],['power','Detect a difference between two means']],'power')}${S('ss-conf','Confidence level',CONF,'0.95')}</div>
+    <div class="grid">${F('ss-sigma','Estimated SD (σ)',15)}${F('ss-E','Margin of error (E)',3)}${F('ss-phat','Expected proportion',0.5,{hint:'Use 0.5 if unknown; it gives the largest n.'})}${F('ss-Ep','Margin of error (E)',0.03)}${F('ss-N','Population size (optional)','',{ph:'very large'})}</div>
+    <div class="grid">${F('ss-d',"Effect size (Cohen's d)",0.5,{hint:'0.2 small · 0.5 medium · 0.8 large'})}${F('ss-alpha','Significance level (α)',0.05)}${F('ss-power','Desired power',0.8)}${S('ss-tails','Test',[['2','Two-tailed'],['1','One-tailed']],'2')}</div>`,
+  run(){
+    const t=val('ss-type'); show('ss-conf',t!=='power'); show('ss-sigma',t==='mean'); show('ss-E',t==='mean'); show('ss-phat',t==='prop'); show('ss-Ep',t==='prop'); show('ss-N',t!=='power'); ['ss-d','ss-alpha','ss-power','ss-tails'].forEach(i=>show(i,t==='power'));
+    if(t!=='power'){
+      const conf=Number(val('ss-conf')), z=M.normInv(1-(1-conf)/2), Np=num('ss-N'); let n0,E,se,unit;
+      if(t==='mean'){ const s=num('ss-sigma'); E=num('ss-E'); need(s>0,'Enter an estimated SD greater than 0.'); need(E>0,'Enter a margin of error greater than 0.'); n0=(z*s/E)**2; unit=''; }
+      else { const p=num('ss-phat'); E=num('ss-Ep'); need(p>0&&p<1,'Enter an expected proportion between 0 and 1.'); need(E>0&&E<1,'Enter a margin of error between 0 and 1, such as 0.03 for ±3 points.'); n0=z*z*p*(1-p)/(E*E); }
+      let n=n0, fpc=false; if(Np>0){ n=n0/(1+(n0-1)/Np); fpc=true; } const N=Math.ceil(n), cl=pct(conf).replace('.00','');
+      se=E/z;
+      render('r-samplesize',{headline:{label:'Required sample size',value:N.toLocaleString(),sub:fpc?`adjusted for a population of ${Np.toLocaleString()}`:'assuming a large population'},
+        say:`With ${N.toLocaleString()} observations, a ${cl} confidence interval will have a margin of error of about ±${fmt(E)}${t==='prop'?` (±${fmt(E*100,2)} percentage points)`:''}.`,
+        rows:[['Critical z*',fmt(z,4)],['Unrounded n',fmt(n0,2)],...(fpc?[['After finite population correction',fmt(n,2)]]:[]),['Formula',t==='mean'?'n = (z*·σ / E)²':'n = z*²·p(1−p) / E²']],note:'Always round up. Plan extra to cover dropouts or non-response.'});
+      Plot.set({kind:'Sampling distribution at this sample size',title:`Estimate ± ${fmt(E)}, SE = ${fmt(se,4)}`,xmin:-4.2*se,xmax:4.2*se,ticks:zTicks(0,se,-4.2*se,4.2*se).map(tk=>({...tk,label:(tk.x>0?'+':'')+fmt(tk.x,3),sub:tk.sub.replace('σ',' SE').replace('μ','true value')})),
+        curves:[{f:x=>M.normPdf(x/se)/se,color:'ink',regions:[[-E,E,'accent']]}],markers:[{x:-E,label:'−E',color:'accent'},{x:E,label:'+E',color:'accent'}],legend:[{c:'accent',soft:true,t:`${cl} of estimates land within ±E`}],
+        caption:'Distance between the estimate and the true value. Larger samples narrow this curve.',hover:x=>`error = ${fmt(x,4)}   P(|error| < this) = ${fmt(2*M.normCdf(Math.abs(x)/se)-1,4)}`});
+      return;
+    }
+    const d=num('ss-d'), a=num('ss-alpha'), pw=num('ss-power'), tails=Number(val('ss-tails'));
+    need(d>0,'Enter an effect size greater than 0.'); need(a>0&&a<0.5,'Enter α between 0 and 0.5.'); need(pw>0.5&&pw<1,'Enter power between 0.5 and 1, such as 0.8.');
+    let n=2*((M.normInv(1-a/tails)+M.normInv(pw))/d)**2; for(let i=0;i<30;i++){ const df=Math.max(2,2*n-2); n=2*((M.tInv(1-a/tails,df)+M.tInv(pw,df))/d)**2; } const N=Math.ceil(n);
+    const delta=d*Math.sqrt(N/2), c=M.normInv(1-a/tails), achieved=M.normSf(c-delta)+(tails===2?M.normCdf(-c-delta):0);
+    render('r-samplesize',{headline:{label:'Required sample size per group',value:N.toLocaleString(),sub:`${(2*N).toLocaleString()} in total`},
+      say:`With ${N} per group, a ${tails===2?'two':'one'}-tailed t-test at α = ${fmt(a)} has a ${pct(pw)} chance of detecting a true effect of d = ${fmt(d)}.`,
+      rows:[['Effect size d',fmt(d)],['α',fmt(a)],['Target power (1 − β)',fmt(pw)],['β (miss rate)',fmt(1-pw)],['Noncentrality δ = d√(n/2)',fmt(delta,3)],['Power at this n (normal approx.)',fmt(achieved,3)]],
+      note:'Assumes two independent groups of equal size and equal variances. Solved with the t distribution.'});
+    const xmin=Math.min(-4,-c-1), xmax=Math.max(4,delta+3.8);
+    Plot.set({kind:'Power analysis',title:`H₀: N(0, 1) vs H₁: N(${fmt(delta,2)}, 1)`,xmin,xmax,
+      curves:[{f:M.normPdf,color:'muted',regions:[[c,Infinity,'signal']].concat(tails===2?[[-Infinity,-c,'signal']]:[])},{f:x=>M.normPdf(x-delta),color:'accent',regions:[[-Infinity,c,'muted'],[c,Infinity,'accent']]}],
+      markers:[{x:0,label:'H₀',color:'muted'},{x:delta,label:'H₁',color:'accent'},{x:c,label:`critical ${fmt(c,2)}`,color:'signal',dash:true}],
+      legend:[{c:'signal',soft:true,t:'α (false alarm)'},{c:'muted',soft:true,t:'β (miss)'},{c:'accent',soft:true,t:'Power'}],
+      caption:'Grey curve: test statistic if there is no effect. Blue curve: if the effect is real. Power is the share of the blue curve past the critical value.',
+      hover:x=>`statistic = ${fmt(x,2)}   P(reject | H₀) beyond here = ${fmt(M.normSf(x),3)}   P(beyond | H₁) = ${fmt(M.normSf(x-delta),3)}`});
+  }};
+
+/* ---------- shell ---------- */
+const order=['normal','zscore','discrete','pvalue','describe','ci','test','chisq','anova','regress','samplesize'];
+const groups=[...new Set(order.map(id=>tools[id].group))];
+$('rail').innerHTML=groups.map(g=>`<div class="grp"><div class="grp-label">${g}</div>${order.filter(id=>tools[id].group===g).map(id=>`<button type="button" data-tool="${id}">${tools[id].name}</button>`).join('')}</div>`).join('');
+$('tools').innerHTML=order.map(id=>`<section class="tool" id="t-${id}" hidden><header><h2>${tools[id].name}</h2><p>${tools[id].lede}</p></header><form class="form" onsubmit="return false">${tools[id].form()}</form><div class="results" id="r-${id}" aria-live="polite"></div></section>`).join('');
+let active=null;
+function run(id){ try{ tools[id].run(); } catch(e){ if(e instanceof UserError){ $('r-'+id).innerHTML=`<p class="error">${esc(e.message)}</p>`; } else { $('r-'+id).innerHTML=`<p class="error">Something went wrong with these inputs. Check them and try again.</p>`; console.error(e); } } }
+function go(id){ if(!tools[id]) id='normal'; active=id; order.forEach(t=>{ $('t-'+t).hidden=t!==id; }); document.querySelectorAll('#rail button').forEach(b=>b.setAttribute('aria-current',b.dataset.tool===id?'true':'false'));
+  const btn=document.querySelector(`#rail button[data-tool="${id}"]`); if(btn&&btn.scrollIntoView&&matchMedia('(max-width:1100px)').matches) btn.scrollIntoView({block:'nearest',inline:'center'}); run(id); }
+order.forEach(id=>{ const sec=$('t-'+id); let tm; const h=()=>{ clearTimeout(tm); tm=setTimeout(()=>run(id),60); }; sec.addEventListener('input',h); sec.addEventListener('change',h); });
+$('rail').addEventListener('click',e=>{ const b=e.target.closest('button[data-tool]'); if(!b) return; if(location.hash==='#'+b.dataset.tool) go(b.dataset.tool); else location.hash=b.dataset.tool; });
+window.addEventListener('hashchange',()=>go(location.hash.slice(1)));
+document.addEventListener('click',e=>{
+  const c=e.target.closest('[data-copy]'); if(c){ const txt=$(c.dataset.copy)._text||''; try{ navigator.clipboard.writeText(txt).then(()=>{c.textContent='Copied';setTimeout(()=>c.textContent='Copy results',1500);},()=>{c.textContent='Copy not available here';}); }catch(_){ c.textContent='Copy not available here'; } return; }
+  const a=e.target.closest('[data-action]'); if(!a||!lastDesc) return;
+  if(a.dataset.action==='desc-normal'){ $('n-mu').value=+lastDesc.mean.toFixed(4); $('n-sd').value=+lastDesc.sd.toFixed(4); $('n-mode').value='between'; $('n-a').value=+(lastDesc.mean-lastDesc.sd).toFixed(4); $('n-b').value=+(lastDesc.mean+lastDesc.sd).toFixed(4); location.hash='normal'; }
+  if(a.dataset.action==='desc-test'){ $('ht-type').value='t1'; $('ht-xbar').value=+lastDesc.mean.toFixed(4); $('ht-s').value=+lastDesc.sd.toFixed(4); $('ht-n').value=lastDesc.n; location.hash='test'; }
+});
+go(location.hash.slice(1)||'normal');
+</script>
+</body>
+</html>
